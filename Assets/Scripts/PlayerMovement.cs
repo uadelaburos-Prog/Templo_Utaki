@@ -19,7 +19,6 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxFallSpeed = -20f;
     [SerializeField] private float hangGravity = 2f;
     [SerializeField] private float hangTimeThreshold = 0.1f;
-    [SerializeField] private float downwardGravity = 2f;
 
     [Header("Suelo")]
     private bool isGrounded;
@@ -31,27 +30,26 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpCooldown = 1.2f;
     private float jumpCooldownTimer = 0f;
 
+    private float inputX;
+    private bool jumpPressedThisFrame;
+    private bool jumpReleasedThisFrame;
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        jumpReady = true;
     }
 
 
     void Update()
     {
         // Controles del Jugador
-        if (Input.GetKey(KeyCode.D))
-        {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.right);
-        }
-        else if (Input.GetKey(KeyCode.A))
-        {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.left);
-        }
-        else
-        {
-            transform.Translate(Vector2.zero);
-        }
+        inputX = 0f;
+        if (Input.GetKey(KeyCode.D)) inputX = 1f;
+        else if (Input.GetKey(KeyCode.A)) inputX = -1f;
+
+        jumpPressedThisFrame = Input.GetKeyDown(KeyCode.Space);
+        jumpReleasedThisFrame = Input.GetKeyUp(KeyCode.Space);
 
         if (isGrounded)
         {
@@ -64,17 +62,28 @@ public class PlayerMovement : MonoBehaviour
             if (jumpCooldownTimer > 0f)
             {
                 jumpCooldownTimer -= Time.deltaTime;
-                jumpReady = jumpCooldownTimer <= 0;
+                if(jumpCooldownTimer <= 0f) { jumpReady = true; }
             }
+        }
+    }
 
-            if (jumpPressed && isGrounded && jumpReady)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-                jumpCooldownTimer = jumpCooldown;
-            }
+    private void FixedUpdate()
+    {
+        rb.linearVelocity = new Vector3(inputX * moveSpeed, rb.linearVelocity.y);
 
-            GrappleScript grapple = GetComponent<GrappleScript>();
+        if (jumpPressedThisFrame && isGrounded && jumpReady)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            Debug.Log("Salto hecho");
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+            jumpPressedThisFrame = false;
+        }
 
+        GrappleScript grapple = GetComponent<GrappleScript>();
+
+        if (!isGrounded)
+        {
             if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
@@ -97,11 +106,6 @@ public class PlayerMovement : MonoBehaviour
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
             }
-
-            if (Input.GetKey(KeyCode.S) && !isGrounded)
-            {
-                rb.gravityScale = downwardGravity;
-            }
         }
     }
 
@@ -110,13 +114,14 @@ public class PlayerMovement : MonoBehaviour
         if (collision.collider.CompareTag("Floor"))
         {
             isGrounded = true;
+            jumpReady = true;
             Debug.Log("Suelo");
         }
     }
 
     private void OnCollisionExit2D(Collision2D collision)
     {
-        if (collision.collider == null)
+        if (collision.collider.CompareTag("Floor"))
         {
             isGrounded = false;
             Debug.Log("No Suelo");
