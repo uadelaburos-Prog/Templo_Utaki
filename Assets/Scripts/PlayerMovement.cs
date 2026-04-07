@@ -1,17 +1,14 @@
 using UnityEngine;
-using Unity.VisualScripting;
+using System.Collections;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(GrappleScript))]
 public class PlayerMovement : MonoBehaviour
 {
     private Rigidbody2D rb;
-    public int moveSpeed = 5;
-    public float counterForce = 0.7f;
+    public float moveSpeed = 5f;
     public float jumpForce = 10f;
-
-    private float speedPlayer = 5f;
-    private Vector3 posAnterior;
 
     [Header("Gravedad")]
     [SerializeField] private float normalGravity = 1f;
@@ -19,11 +16,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxFallSpeed = -20f;
     [SerializeField] private float hangGravity = 2f;
     [SerializeField] private float hangTimeThreshold = 0.1f;
-    [SerializeField] private float downwardGravity = 2f;
 
     [Header("Suelo")]
     private bool isGrounded;
-    private bool jumpPressed;
+    [SerializeField] private LayerMask mask;
+    [SerializeField] private Transform groundCheck;
 
     [Header("Salto")]
     [SerializeField, Range(0f, 1f)] private float jumpCutMult = 0.5f;
@@ -31,56 +28,65 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpCooldown = 1.2f;
     private float jumpCooldownTimer = 0f;
 
+    [Header("Stamina")]
+    [SerializeField] private Image image;
+    [SerializeField] private float maxGrappleTime = 5f;
+
+    private GrappleScript grappleScript;
+    private float grappleTime = 0f;
+
+    private bool hangingTimerRunning = false;
+
+    public bool isHanging => grappleScript.isGrappling;
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-    }
+        grappleScript = GetComponent<GrappleScript>();
+        grappleTime = 0f;
 
+        if (image != null)
+            image.fillAmount = 1f;
+    }
 
     void Update()
     {
-        // Controles del Jugador
-        if (Input.GetKey(KeyCode.D))
+        // Translate ignora la física; esto hace que el grapple funcione correctamente
+        float inputX = 0f;
+        if (Input.GetKey(KeyCode.D)) inputX = 1f;
+        else if (Input.GetKey(KeyCode.A)) inputX = -1f;
+
+        // Solo aplicar movimiento horizontal si no estamos grappleando
+        // (el swing del grapple maneja su propio movimiento horizontal)
+        if (!isHanging)
         {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.right);
-        }
-        else if (Input.GetKey(KeyCode.A))
-        {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.left);
-        }
-        else
-        {
-            transform.Translate(Vector2.zero);
+            rb.linearVelocity = new Vector2(inputX * moveSpeed, rb.linearVelocity.y);
         }
 
-        if (isGrounded)
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(1f, 1f), 0f, mask);
+
+        if (jumpCooldownTimer > 0f)
         {
-            jumpPressed = Input.GetKeyDown(KeyCode.Space);
+            jumpCooldownTimer -= Time.deltaTime;
+            if (jumpCooldownTimer <= 0f) jumpReady = true;
+        }
 
-            speedPlayer = (transform.position - posAnterior).magnitude / Time.deltaTime;
-            posAnterior = transform.position;
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded && jumpReady)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+        }
 
+        // Jump cut: cortar el salto al soltar espacio
+        if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
+        }
 
-            if (jumpCooldownTimer > 0f)
-            {
-                jumpCooldownTimer -= Time.deltaTime;
-                jumpReady = jumpCooldownTimer <= 0;
-            }
-
-            if (jumpPressed && isGrounded && jumpReady)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-                jumpCooldownTimer = jumpCooldown;
-            }
-
-            GrappleScript grapple = GetComponent<GrappleScript>();
-
-            if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
-            }
-
-            if (rb.linearVelocity.y < 0 && grapple.isGrappling == false)
+        if (!isGrounded && !isHanging)
+        {
+            if (rb.linearVelocity.y < 0)
             {
                 rb.gravityScale = fallGravity;
             }
@@ -92,34 +98,64 @@ public class PlayerMovement : MonoBehaviour
             {
                 rb.gravityScale = normalGravity;
             }
+        }
+        else if (isGrounded || isHanging)
+        {
+            rb.gravityScale = normalGravity;
+        }
 
-            if (rb.linearVelocity.y < maxFallSpeed)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
-            }
+        // Clamp de velocidad de caída
+        if (rb.linearVelocity.y < maxFallSpeed)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
+        }
 
-            if (Input.GetKey(KeyCode.S) && !isGrounded)
+        // --- Stamina del grapple ---
+        if (isHanging)
+        {
+            grappleTime += Time.deltaTime;
+
+            // Actualizar el fill de la imagen en tiempo real
+            if (image != null)
+                image.fillAmount = 1f - (grappleTime / maxGrappleTime);
+
+            if (grappleTime >= maxGrappleTime && !hangingTimerRunning)
             {
-                rb.gravityScale = downwardGravity;
+                StartCoroutine(CutGrappleAndRecover());
             }
+        }
+
+        if (!isHanging && isGrounded) {image.fillAmount += Time.deltaTime * 0.75f; grappleTime = 0f; }
+    }
+
+    private IEnumerator CutGrappleAndRecover()
+    {
+        hangingTimerRunning = true;
+
+        // Cortar el grapple
+        grappleScript.GrappleRetract();
+
+        // Esperar antes de recuperar
+        yield return new WaitForSeconds(2f);
+
+        hangingTimerRunning = false;
+    }
+
+    // Resetear stamina al soltar el grapple manualmente
+    private void ResetStamina()
+    {
+        if (!hangingTimerRunning)
+        {
+            grappleTime = 0f;
+            if (image != null)
+                image.fillAmount = 1f;
         }
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnDrawGizmos()
     {
-        if (collision.collider.CompareTag("Floor"))
-        {
-            isGrounded = true;
-            Debug.Log("Suelo");
-        }
-    }
-
-    private void OnCollisionExit2D(Collision2D collision)
-    {
-        if (collision.collider == null)
-        {
-            isGrounded = false;
-            Debug.Log("No Suelo");
-        }
+        if (groundCheck == null) return;
+        Gizmos.color = Color.red;
+        Gizmos.DrawCube(groundCheck.position + Vector3.down * 0.1f, new Vector3(0.5f, 0.1f, 0f));
     }
 }
