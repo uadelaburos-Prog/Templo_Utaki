@@ -28,22 +28,15 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpCooldown = 1.2f;
     private float jumpCooldownTimer = 0f;
 
-    [Header("Stamina")]
-    [SerializeField] private Image image;
-    [SerializeField] private float maxGrappleTime = 5f;
-
-    private GrappleScript grappleScript;
-    private float grappleTime = 0f;
-
-    private bool hangingTimerRunning = false;
-
-    public bool isHanging => grappleScript.isGrappling;
+    private float inputX;
+    private bool jumpPressedThisFrame;
+    private bool jumpReleasedThisFrame;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        grappleScript = GetComponent<GrappleScript>();
-        grappleTime = 0f;
+        jumpReady = true;
+    }
 
         if (image != null)
             image.fillAmount = 1f;
@@ -51,17 +44,13 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        // Translate ignora la física; esto hace que el grapple funcione correctamente
-        float inputX = 0f;
+        // Controles del Jugador
+        inputX = 0f;
         if (Input.GetKey(KeyCode.D)) inputX = 1f;
         else if (Input.GetKey(KeyCode.A)) inputX = -1f;
 
-        // Solo aplicar movimiento horizontal si no estamos grappleando
-        // (el swing del grapple maneja su propio movimiento horizontal)
-        if (!isHanging)
-        {
-            rb.linearVelocity = new Vector2(inputX * moveSpeed, rb.linearVelocity.y);
-        }
+        jumpPressedThisFrame = Input.GetKeyDown(KeyCode.Space);
+        jumpReleasedThisFrame = Input.GetKeyUp(KeyCode.Space);
 
         isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(1f, 1f), 0f, mask);
 
@@ -84,9 +73,37 @@ public class PlayerMovement : MonoBehaviour
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
         }
 
-        if (!isGrounded && !isHanging)
+            if (jumpCooldownTimer > 0f)
+            {
+                jumpCooldownTimer -= Time.deltaTime;
+                if(jumpCooldownTimer <= 0f) { jumpReady = true; }
+            }
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        rb.linearVelocity = new Vector3(inputX * moveSpeed, rb.linearVelocity.y);
+
+        if (jumpPressedThisFrame && isGrounded && jumpReady)
         {
-            if (rb.linearVelocity.y < 0)
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            Debug.Log("Salto hecho");
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+            jumpPressedThisFrame = false;
+        }
+
+        GrappleScript grapple = GetComponent<GrappleScript>();
+
+        if (!isGrounded)
+        {
+            if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
+            }
+
+            if (rb.linearVelocity.y < 0 && grapple.isGrappling == false)
             {
                 rb.gravityScale = fallGravity;
             }
@@ -104,24 +121,9 @@ public class PlayerMovement : MonoBehaviour
             rb.gravityScale = normalGravity;
         }
 
-        // Clamp de velocidad de caída
-        if (rb.linearVelocity.y < maxFallSpeed)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
-        }
-
-        // --- Stamina del grapple ---
-        if (isHanging)
-        {
-            grappleTime += Time.deltaTime;
-
-            // Actualizar el fill de la imagen en tiempo real
-            if (image != null)
-                image.fillAmount = 1f - (grappleTime / maxGrappleTime);
-
-            if (grappleTime >= maxGrappleTime && !hangingTimerRunning)
+            if (rb.linearVelocity.y < maxFallSpeed)
             {
-                StartCoroutine(CutGrappleAndRecover());
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
             }
         }
 
@@ -150,12 +152,5 @@ public class PlayerMovement : MonoBehaviour
             if (image != null)
                 image.fillAmount = 1f;
         }
-    }
-
-    private void OnDrawGizmos()
-    {
-        if (groundCheck == null) return;
-        Gizmos.color = Color.red;
-        Gizmos.DrawCube(groundCheck.position + Vector3.down * 0.1f, new Vector3(0.5f, 0.1f, 0f));
     }
 }
