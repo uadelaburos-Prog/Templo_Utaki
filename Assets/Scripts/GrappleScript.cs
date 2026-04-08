@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Android;
 
 [RequireComponent(typeof(Rigidbody2D))]
-[RequireComponent(typeof(DistanceJoint2D))]
+[RequireComponent(typeof(SpringJoint2D))]
 [RequireComponent(typeof(LineRenderer))]
 public class GrappleScript : MonoBehaviour
 {
@@ -17,33 +20,69 @@ public class GrappleScript : MonoBehaviour
     public GameObject hookPrefab;
     private GameObject currentHook; 
 
-    private DistanceJoint2D joint;
+    [HideInInspector] public SpringJoint2D joint;
     private Rigidbody2D rb;
-    private LineRenderer line;
+    [HideInInspector] public LineRenderer line;
     [SerializeField] private Camera cam;
 
-    public bool isGrappling = false;
+    [HideInInspector] public bool isGrappling = false;
     private Vector2 grapplePoint;
     [SerializeField] private float playerSpeed = 5;
-    [SerializeField] private float acceleration = 25;
+    [SerializeField] private float acceleration = 50;
 
     private enum GrappleState { idle, launching, attached, retracting }
     private GrappleState state = GrappleState.idle;
     private Vector2 hookCurrentPos;
 
+    [Header("Configuración General")]
+    [SerializeField] private int segments = 20;
+    [Range(0, 20)][SerializeField] private float straightenLineSpeed = 5;
+
+    [Header("Animación de la Cuerda:")]
+    public AnimationCurve ropeAnimationCurve;
+    [Range(0.01f, 4)][SerializeField] private float StartWaveSize = 2;
+    float waveSize = 0;
+
+    [Header("Progresión de la Cuerda:")]
+    public AnimationCurve ropeProgressionCurve;
+    [SerializeField][Range(1, 50)] private float ropeProgressionSpeed = 1;
+
+    private float ropeTimer = 0f;
+
+    bool straightLine = true;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        joint = GetComponent<DistanceJoint2D>();
+        joint = GetComponent<SpringJoint2D>();
         line = GetComponent<LineRenderer>();
 
         joint.enabled = false;
         joint.autoConfigureDistance = false;
         joint.enableCollision = false;
-
-        line.positionCount = 2;
         line.useWorldSpace = true;
+    }
+
+    private void OnEnable()
+    {
+        waveSize = StartWaveSize;
+        line.positionCount = segments;
+        straightLine = false;
+        LinePointsToFirePoint();
+    }
+
+    private void OnDisable()
+    {
+        line.enabled = false;
+        isGrappling = false;
+    }
+
+    private void LinePointsToFirePoint()
+    {
+        for (int i = 0; i < segments; i++)
+        {
+            line.SetPosition(i, transform.position);
+        }
     }
 
     void Update()
@@ -62,13 +101,15 @@ public class GrappleScript : MonoBehaviour
         switch (state)
         {
             case GrappleState.launching:
-                UpdateLauching(); break;
+                UpdateLaunching(); break;
             case GrappleState.attached:
                 GrappleSwing();
+                waveSize = Mathf.MoveTowards(waveSize, 0f, straightenLineSpeed * Time.deltaTime);
                 UpdateLine(hookCurrentPos);
                 break;
             case GrappleState.retracting:
-                UpdateRetracting(); break;
+                UpdateRetracting();
+                break;
         }
     }
 
@@ -87,8 +128,11 @@ public class GrappleScript : MonoBehaviour
         }
     }
 
-    private void UpdateLauching()
+    private void UpdateLaunching()
     {
+        ropeTimer += Time.deltaTime * ropeProgressionSpeed;
+        ropeTimer = Mathf.Clamp01(ropeTimer);
+
         hookCurrentPos = Vector2.MoveTowards(hookCurrentPos, grapplePoint, launchSpeed * Time.deltaTime);
         UpdateLine(hookCurrentPos);
 
@@ -108,17 +152,24 @@ public class GrappleScript : MonoBehaviour
 
     private void UpdateLine(Vector2 endRope)
     {
-        int segments = 20; 
         line.positionCount = segments;
-
         Vector2 origin = (Vector2)transform.position;
+        
+        Vector2 ropeDir = (endRope - origin).normalized;
+        Vector2 perpendicular = Vector2.Perpendicular(ropeDir);
+
+        float progression = ropeProgressionCurve.Evaluate(ropeTimer);
+
 
         for (int i = 0; i < segments; i++)
         {
-            float t = (float)i / (segments - 1);
-            Vector2 pointOnLine = Vector2.Lerp(transform.position, endRope, t);
-            float seg = Mathf.Sin(t * Mathf.PI) * 0.5f; // Ajusta la cantidad de seg
-            pointOnLine.y -= seg;
+            float delta = (float)i / (segments - 1f);
+
+            Vector2 offSet = perpendicular * ropeAnimationCurve.Evaluate(delta) * waveSize;
+
+            Vector2 targetPosition = Vector2.Lerp(origin, endRope, delta) + offSet;
+
+            Vector2 pointOnLine = Vector2.Lerp(origin, targetPosition, progression);
             line.SetPosition(i, pointOnLine);
         }
 
@@ -138,6 +189,10 @@ public class GrappleScript : MonoBehaviour
         grapplePoint = hit.point;
         hookCurrentPos = origin;
 
+        ropeTimer = 0f;
+        waveSize = StartWaveSize;   
+        straightLine = false;
+
         joint.connectedAnchor = grapplePoint;
         joint.distance = Vector2.Distance(origin, grapplePoint);
 
@@ -148,7 +203,7 @@ public class GrappleScript : MonoBehaviour
         rb.linearDamping = 0f;
     }
 
-    private void GrappleRetract() // retrae el gancho y detiene el movimiento pendular
+    public void GrappleRetract() // retrae el gancho y detiene el movimiento pendular
     {
         joint.enabled = false;
         isGrappling = false;
@@ -181,9 +236,8 @@ public class GrappleScript : MonoBehaviour
         }
         else // calcula la desaceleración cuando no hay input
         {
-            float targetVelocity = input * playerSpeed;
-            float velocityDiff = targetVelocity - Vector2.Dot(rb.linearVelocity, tangent);
-            float force = velocityDiff * acceleration * 0.25f * Time.deltaTime; // Reducción de fuerza para desacelerar más suavemente
+            float velocityDiff = -Vector2.Dot(rb.linearVelocity, tangent);
+            float force = velocityDiff * acceleration * 0.125f * Time.deltaTime; // Reducción de fuerza para desacelerar más suavemente
             rb.AddForce(tangent * force);
         }
     }

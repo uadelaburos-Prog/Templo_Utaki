@@ -1,17 +1,14 @@
 using UnityEngine;
-using Unity.VisualScripting;
+using System.Collections;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(GrappleScript))]
 public class PlayerMovement : MonoBehaviour
 {
     private Rigidbody2D rb;
-    public int moveSpeed = 5;
-    public float counterForce = 0.7f;
+    public float moveSpeed = 5f;
     public float jumpForce = 10f;
-
-    private float speedPlayer = 5f;
-    private Vector3 posAnterior;
 
     [Header("Gravedad")]
     [SerializeField] private float normalGravity = 1f;
@@ -19,11 +16,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxFallSpeed = -20f;
     [SerializeField] private float hangGravity = 2f;
     [SerializeField] private float hangTimeThreshold = 0.1f;
-    [SerializeField] private float downwardGravity = 2f;
 
     [Header("Suelo")]
     private bool isGrounded;
-    private bool jumpPressed;
+    [SerializeField] private LayerMask mask;
+    [SerializeField] private Transform groundCheck;
 
     [Header("Salto")]
     [SerializeField, Range(0f, 1f)] private float jumpCutMult = 0.5f;
@@ -31,50 +28,76 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpCooldown = 1.2f;
     private float jumpCooldownTimer = 0f;
 
+    private float inputX;
+    private bool jumpPressedThisFrame;
+    private bool jumpReleasedThisFrame;
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        jumpReady = true;
     }
 
+        if (image != null)
+            image.fillAmount = 1f;
+    }
 
     void Update()
     {
         // Controles del Jugador
-        if (Input.GetKey(KeyCode.D))
+        inputX = 0f;
+        if (Input.GetKey(KeyCode.D)) inputX = 1f;
+        else if (Input.GetKey(KeyCode.A)) inputX = -1f;
+
+        jumpPressedThisFrame = Input.GetKeyDown(KeyCode.Space);
+        jumpReleasedThisFrame = Input.GetKeyUp(KeyCode.Space);
+
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(1f, 1f), 0f, mask);
+
+        if (jumpCooldownTimer > 0f)
         {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.right);
-        }
-        else if (Input.GetKey(KeyCode.A))
-        {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.left);
-        }
-        else
-        {
-            transform.Translate(Vector2.zero);
+            jumpCooldownTimer -= Time.deltaTime;
+            if (jumpCooldownTimer <= 0f) jumpReady = true;
         }
 
-        if (isGrounded)
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded && jumpReady)
         {
-            jumpPressed = Input.GetKeyDown(KeyCode.Space);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+        }
 
-            speedPlayer = (transform.position - posAnterior).magnitude / Time.deltaTime;
-            posAnterior = transform.position;
-
+        // Jump cut: cortar el salto al soltar espacio
+        if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
+        }
 
             if (jumpCooldownTimer > 0f)
             {
                 jumpCooldownTimer -= Time.deltaTime;
-                jumpReady = jumpCooldownTimer <= 0;
+                if(jumpCooldownTimer <= 0f) { jumpReady = true; }
             }
+        }
+    }
 
-            if (jumpPressed && isGrounded && jumpReady)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-                jumpCooldownTimer = jumpCooldown;
-            }
+    private void FixedUpdate()
+    {
+        rb.linearVelocity = new Vector3(inputX * moveSpeed, rb.linearVelocity.y);
 
-            GrappleScript grapple = GetComponent<GrappleScript>();
+        if (jumpPressedThisFrame && isGrounded && jumpReady)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            Debug.Log("Salto hecho");
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+            jumpPressedThisFrame = false;
+        }
 
+        GrappleScript grapple = GetComponent<GrappleScript>();
+
+        if (!isGrounded)
+        {
             if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
@@ -92,34 +115,42 @@ public class PlayerMovement : MonoBehaviour
             {
                 rb.gravityScale = normalGravity;
             }
+        }
+        else if (isGrounded || isHanging)
+        {
+            rb.gravityScale = normalGravity;
+        }
 
             if (rb.linearVelocity.y < maxFallSpeed)
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
             }
-
-            if (Input.GetKey(KeyCode.S) && !isGrounded)
-            {
-                rb.gravityScale = downwardGravity;
-            }
         }
+
+        if (!isHanging && isGrounded) {image.fillAmount += Time.deltaTime * 0.75f; grappleTime = 0f; }
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private IEnumerator CutGrappleAndRecover()
     {
-        if (collision.collider.CompareTag("Floor"))
-        {
-            isGrounded = true;
-            Debug.Log("Suelo");
-        }
+        hangingTimerRunning = true;
+
+        // Cortar el grapple
+        grappleScript.GrappleRetract();
+
+        // Esperar antes de recuperar
+        yield return new WaitForSeconds(2f);
+
+        hangingTimerRunning = false;
     }
 
-    private void OnCollisionExit2D(Collision2D collision)
+    // Resetear stamina al soltar el grapple manualmente
+    private void ResetStamina()
     {
-        if (collision.collider == null)
+        if (!hangingTimerRunning)
         {
-            isGrounded = false;
-            Debug.Log("No Suelo");
+            grappleTime = 0f;
+            if (image != null)
+                image.fillAmount = 1f;
         }
     }
 }
