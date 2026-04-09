@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections;
-using UnityEditor;
+using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Android;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(SpringJoint2D))]
@@ -21,6 +23,18 @@ public class GrappleScript : MonoBehaviour
 
     [HideInInspector] public bool isGrappling = false;
     private Vector2 grapplePoint;
+    public GameObject hookPrefab;
+    private GameObject currentHook; 
+
+    [HideInInspector] public SpringJoint2D joint;
+    private Rigidbody2D rb;
+    [HideInInspector] public LineRenderer line;
+    [SerializeField] private Camera cam;
+
+    [HideInInspector] public bool isGrappling = false;
+    private Vector2 grapplePoint;
+    [SerializeField] private float playerSpeed = 5;
+    [SerializeField] private float acceleration = 50;
 
     private enum GrappleState { idle, launching, attached, retracting }
     private GrappleState state = GrappleState.idle;
@@ -77,7 +91,9 @@ public class GrappleScript : MonoBehaviour
     private void LinePointsToFirePoint()
     {
         for (int i = 0; i < segments; i++)
+        {
             line.SetPosition(i, transform.position);
+        }
     }
 
     void Update()
@@ -210,7 +226,7 @@ public class GrappleScript : MonoBehaviour
         rb.linearDamping = 0f;
     }
 
-    public void GrappleRetract()
+    public void GrappleRetract() // retrae el gancho y detiene el movimiento pendular
     {
         joint.enabled = false;
         isGrappling = false;

@@ -121,6 +121,8 @@ public class PlayerMovement : MonoBehaviour
             // Grounded or apex hang
             rb.gravityScale = normalGravity;
         }
+
+        if (!isHanging && isGrounded) {image.fillAmount += Time.deltaTime * 0.75f; grappleTime = 0f; }
     }
 
     private void OnDrawGizmos()

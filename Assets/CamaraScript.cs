@@ -1,22 +1,25 @@
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
 
+[RequireComponent(typeof(Rigidbody2D))]
 public class CamaraScript : MonoBehaviour
 {
     Camera cam;
 
     [Header("Side Viewer")]
-    [SerializeField, Range(6f, 13f)] private float orthoSize = 8f;
-    [SerializeField, Range(0f, 2f)] private float lookBehindDistance = 3f;
-    [SerializeField, Range(1f, 5f)] private float lookBehindSpeed = 1f;
-    [SerializeField, Range(1f, 6f)] private float camSpeed = 1f;
+    [SerializeField, Range (6f, 13f)] private float orthoSize = 8f;
+    [SerializeField, Range (0f, 2f)] private float lookBehindDistance = 3f;
+    [SerializeField, Range (1f, 5f)] private float lookBehindSpeed = 1f;
+    [SerializeField, Range (1f, 6f)] private float camSpeed = 1f;
 
     [Header("Up&Down Viewer")]
-    [SerializeField, Range(0f, 3f)] private float lookDownDistance = 3f;
-    [SerializeField, Range(1f, 5f)] private float lookDownSpeed = 1f;
+    [SerializeField, Range (0f, 3f)] private float lookDownDistance = 3f;
+    [SerializeField, Range (1f, 5f)] private float lookDownSpeed = 1f;
 
     [Header("Variables")]
     [SerializeField] private float maxFallSpeed = 10f;
-
+ 
     [SerializeField] private Transform player;
     private Rigidbody2D rb;
 
@@ -61,5 +64,18 @@ public class CamaraScript : MonoBehaviour
         }
 
         transform.position = Vector3.Lerp(transform.position, targetPos, camSpeed * Time.deltaTime);
+
+        //logica mirar hacia arriba
+        if (rb.linearVelocityY < 0f)
+        {
+            float fallPercent = Mathf.Clamp01(-rb.linearVelocityY / maxFallSpeed);
+            float targetLookDown = fallPercent * lookDownDistance;
+
+            currentLookDown = Mathf.Lerp(currentLookDown, targetLookDown, lookDownSpeed * Time.deltaTime);
+        }
+        else
+        {
+            currentLookDown = Mathf.Lerp(currentLookDown, 0f, lookDownSpeed * Time.deltaTime);
+        }
     }
 }
