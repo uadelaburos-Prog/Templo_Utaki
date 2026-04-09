@@ -1,17 +1,14 @@
 using UnityEngine;
-using Unity.VisualScripting;
+using System.Collections;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(GrappleScript))]
 public class PlayerMovement : MonoBehaviour
 {
     private Rigidbody2D rb;
-    public int moveSpeed = 5;
-    public float counterForce = 0.7f;
+    public float moveSpeed = 5f;
     public float jumpForce = 10f;
-
-    private float speedPlayer = 5f;
-    private Vector3 posAnterior;
 
     [Header("Gravedad")]
     [SerializeField] private float normalGravity = 1f;
@@ -19,11 +16,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxFallSpeed = -20f;
     [SerializeField] private float hangGravity = 2f;
     [SerializeField] private float hangTimeThreshold = 0.1f;
-    [SerializeField] private float downwardGravity = 2f;
 
     [Header("Suelo")]
     private bool isGrounded;
-    private bool jumpPressed;
+    [SerializeField] private LayerMask mask;
+    [SerializeField] private Transform groundCheck;
 
     [Header("Salto")]
     [SerializeField, Range(0f, 1f)] private float jumpCutMult = 0.5f;
@@ -31,95 +28,105 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpCooldown = 1.2f;
     private float jumpCooldownTimer = 0f;
 
+    private GrappleScript grapple;
+
+    public bool isHanging => grapple.isGrappling;
+
+    // Coyote time
+    [SerializeField] private float coyoteTime = 0.12f;
+    private float coyoteTimer = 0f;
+
+    // Input buffering
+    [SerializeField] private float jumpBufferTime = 0.15f;
+    private float jumpBufferTimer = 0f;
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        grapple = GetComponent<GrappleScript>();
     }
-
 
     void Update()
     {
-        // Controles del Jugador
-        if (Input.GetKey(KeyCode.D))
+        float inputX = 0f;
+        if (Input.GetKey(KeyCode.D)) inputX = 1f;
+        else if (Input.GetKey(KeyCode.A)) inputX = -1f;
+
+        if (!isHanging)
         {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.right);
+            rb.linearVelocity = new Vector2(inputX * moveSpeed, rb.linearVelocity.y);
         }
-        else if (Input.GetKey(KeyCode.A))
+
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(1f, 1f), 0f, mask);
+
+        // --- COYOTE TIME ---
+        if (isGrounded)
+            coyoteTimer = coyoteTime;
+        else
+            coyoteTimer -= Time.deltaTime;
+
+        // --- INPUT BUFFERING ---
+        if (Input.GetKeyDown(KeyCode.Space))
+            jumpBufferTimer = jumpBufferTime;
+
+        if (jumpBufferTimer > 0f)
+            jumpBufferTimer -= Time.deltaTime;
+
+        // --- JUMP COOLDOWN RESET ---                  
+        if (!jumpReady)
         {
-            transform.Translate(moveSpeed * Time.deltaTime * Vector2.left);
+            jumpCooldownTimer -= Time.deltaTime;
+            if (jumpCooldownTimer <= 0f)
+                jumpReady = true;
+        }
+
+        // --- CONDICIÓN DE SALTO ---
+        bool canJump = isGrounded || coyoteTimer > 0f;
+
+        if (jumpBufferTimer > 0f && canJump && jumpReady)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            jumpBufferTimer = 0f;
+            coyoteTimer = 0f;
+            jumpCooldownTimer = jumpCooldown;
+            jumpReady = false;
+        }
+
+        // Jump cut
+        if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
+    }
+
+    void FixedUpdate()                                  
+    {
+        if (isHanging)
+        {
+            rb.gravityScale = hangGravity;
+        }
+        else if (rb.linearVelocity.y < -hangTimeThreshold)
+        {
+            // Falling — apply heavy gravity and clamp fall speed
+            rb.gravityScale = fallGravity;
+
+            if (rb.linearVelocity.y < maxFallSpeed)
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
+        }
+        else if (rb.linearVelocity.y > 0f)
+        {
+            // Rising
+            rb.gravityScale = normalGravity;
         }
         else
         {
-            transform.Translate(Vector2.zero);
-        }
-
-        if (isGrounded)
-        {
-            jumpPressed = Input.GetKeyDown(KeyCode.Space);
-
-            speedPlayer = (transform.position - posAnterior).magnitude / Time.deltaTime;
-            posAnterior = transform.position;
-
-
-            if (jumpCooldownTimer > 0f)
-            {
-                jumpCooldownTimer -= Time.deltaTime;
-                jumpReady = jumpCooldownTimer <= 0;
-            }
-
-            if (jumpPressed && isGrounded && jumpReady)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-                jumpCooldownTimer = jumpCooldown;
-            }
-
-            GrappleScript grapple = GetComponent<GrappleScript>();
-
-            if (Input.GetKeyUp(KeyCode.Space) && rb.linearVelocity.y > 0)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
-            }
-
-            if (rb.linearVelocity.y < 0 && grapple.isGrappling == false)
-            {
-                rb.gravityScale = fallGravity;
-            }
-            else if (rb.linearVelocity.y > 0 && Mathf.Abs(rb.linearVelocity.y) < hangTimeThreshold)
-            {
-                rb.gravityScale = hangGravity;
-            }
-            else
-            {
-                rb.gravityScale = normalGravity;
-            }
-
-            if (rb.linearVelocity.y < maxFallSpeed)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
-            }
-
-            if (Input.GetKey(KeyCode.S) && !isGrounded)
-            {
-                rb.gravityScale = downwardGravity;
-            }
+            // Grounded or apex hang
+            rb.gravityScale = normalGravity;
         }
     }
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnDrawGizmos()
     {
-        if (collision.collider.CompareTag("Floor"))
-        {
-            isGrounded = true;
-            Debug.Log("Suelo");
-        }
-    }
-
-    private void OnCollisionExit2D(Collision2D collision)
-    {
-        if (collision.collider == null)
-        {
-            isGrounded = false;
-            Debug.Log("No Suelo");
-        }
+        if (groundCheck == null) return;
+        Gizmos.color = Color.red;
+        Gizmos.DrawCube(groundCheck.position + Vector3.down * 0.1f, new Vector3(0.5f, 0.1f, 0f));
     }
 }
