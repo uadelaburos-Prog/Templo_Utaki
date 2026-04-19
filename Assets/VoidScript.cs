@@ -7,7 +7,7 @@ public class VoidScript : MonoBehaviour
     {
         if(collision != null && collision.CompareTag("Player"))
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            GameLoopManager.Instance.PlayerDied();
         }
     }
 }
