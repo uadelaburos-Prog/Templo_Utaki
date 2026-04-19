@@ -1,8 +1,5 @@
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.UIElements;
 
-[RequireComponent(typeof(Rigidbody2D))]
 public class CamaraScript : MonoBehaviour
 {
     Camera cam;
@@ -28,13 +25,8 @@ public class CamaraScript : MonoBehaviour
 
     private void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
+        rb = player.GetComponent<Rigidbody2D>();
         cam = GetComponent<Camera>();
-        cam.orthographicSize = orthoSize;
-    }
-
-    private void Update()
-    {
         cam.orthographicSize = orthoSize;
     }
 
@@ -64,18 +56,5 @@ public class CamaraScript : MonoBehaviour
         }
 
         transform.position = Vector3.Lerp(transform.position, targetPos, camSpeed * Time.deltaTime);
-
-        //logica mirar hacia arriba
-        if (rb.linearVelocityY < 0f)
-        {
-            float fallPercent = Mathf.Clamp01(-rb.linearVelocityY / maxFallSpeed);
-            float targetLookDown = fallPercent * lookDownDistance;
-
-            currentLookDown = Mathf.Lerp(currentLookDown, targetLookDown, lookDownSpeed * Time.deltaTime);
-        }
-        else
-        {
-            currentLookDown = Mathf.Lerp(currentLookDown, 0f, lookDownSpeed * Time.deltaTime);
-        }
     }
 }

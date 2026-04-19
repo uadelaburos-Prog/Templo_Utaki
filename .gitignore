@@ -1,0 +1,28 @@
+# Carpetas generadas por Unity — nunca versionar
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Bb]uild/
+[Bb]uilds/
+MemoryCaptures/
+UserSettings/
+
+# Archivos de IDE
+.vs/
+.vsconfig
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archivos de debug de Unity
+sysinfo.txt
+*.stackdump
