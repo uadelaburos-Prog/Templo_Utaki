@@ -100,7 +100,9 @@ Plataformas 2D pixel art (tiles 8×8 px) con **gancho tipo péndulo** como mecá
 ## 5. Sistema del gancho (mecánica core)
 
 ### 5.1 Ciclo de estados
-`idle → launching → attached → (swinging) → retracting → idle`
+`idle → charging → launching → attached → (swinging) → retracting → idle`
+
+> **Nota (2026-04-19):** se agregó el estado `charging` — el jugador sostiene click para cargar distancia (0% = `minGrappleDistance`, 100% = `maxGrappleDistance`). Ver §5.2 campos `minGrappleDistance`, `maxChargeTime`.
 
 ### 5.2 Parámetros (SerializeField en `GrappleScript.cs`)
 
@@ -325,9 +327,9 @@ Ambiental por zona, sigue la paleta visual. Se silencia en pausa (solo SFX de UI
 
 | Script | Estado | Ubicación | Responsabilidad |
 |---|---|---|---|
-| `PlayerMovement.cs` | 🟡 Existe (bugs) | `Assets/Scripts/` | Movimiento horizontal, salto, gravedad variable, coyote time, input buffer, detección de suelo |
-| `GrappleScript.cs` | 🔴 Existe (no compila) | `Assets/Scripts/` | Ciclo de estados del gancho, raycast de detección, snap, LineRenderer Bezier, física |
-| `CamaraScript.cs` | 🟡 Existe (bug rb) | `Assets/` | Seguimiento del player con Lerp, look-behind horizontal, look-down por velocidad de caída |
+| `PlayerMovement.cs` | ✅ Existe (funcional) | `Assets/Scripts/` | Movimiento horizontal, salto, gravedad variable, coyote time, input buffer, detección de suelo. Incluye momentum jump, swing jump boost. |
+| `GrappleScript.cs` | ✅ Existe (funcional) | `Assets/Scripts/` | Ciclo de estados del gancho, Linecast de detección, snap assist, LineRenderer Bezier, carga (0–1.5s), climb W/S, obstacleMask. |
+| `CamaraScript.cs` | ✅ Existe (funcional) | `Assets/` | Seguimiento del player con Lerp, look-behind horizontal, look-down por velocidad de caída. |
 | `MovingPlatform.cs` | 🟡 Existe (senoidal) | `Assets/` | Plataforma móvil horizontal con `Mathf.Sin` + `MovePosition` |
 | `VoidScript.cs` | ✅ Existe | `Assets/` | Trigger que recarga la escena al caer al vacío |
 | `PatrollerAI.cs` | ⚪ Falta | — | Máquina de estados del Patrullero: idle, patrulla, alerta, persecución, regreso |
@@ -471,51 +473,50 @@ Ambiental por zona, sigue la paleta visual. Se silencia en pausa (solo SFX de UI
 
 ---
 
-## 21. Estado actual del código (snapshot 2026-04-18)
+## 21. Estado actual del código (snapshot 2026-04-19)
 
-> Snapshot del código presente en `Assets/` al 2026-04-18. Comparado línea por línea contra el GDD v3.0. Fuente de verdad para planificar Parcial 1.
+> Snapshot actualizado al 2026-04-19. Sesión de alineación con GDD completada.
 
-### 21.1 Bloqueantes de compilación 🔴
+### 21.1 Bloqueantes de compilación ✅ RESUELTOS
 
-El proyecto **no compila tal cual está**. Arreglar antes de cualquier otra tarea.
+1. ~~`GrappleScript.cs` — fields duplicados~~ → **✅ Eliminados.**
+2. ~~`PlayerMovement.cs` — `image.fillAmount`/`grappleTime`~~ → **✅ Eliminados.** Se descartó el sistema "Tiempo de Cuerda".
 
-1. **`GrappleScript.cs` líneas 20-26 y 29-35** — Los campos `joint`, `rb`, `line`, `isGrappling`, `grapplePoint` están declarados dos veces. El segundo bloque añade `[SerializeField] private Camera cam`, `playerSpeed`, `acceleration`. Consolidar en una sola declaración.
-2. **`PlayerMovement.cs` línea 125** — Referencia a `image.fillAmount` y `grappleTime`, ninguna de las dos declarada en el script. Además `using UnityEngine.UI` sólo se justifica si se agrega el field `[SerializeField] private Image image` y un float `grappleTime`. La escena ya tiene `image` serializado apuntando a un `Tiempo de Cuerda(PlaceHolder)` y un `maxGrappleTime: 5` (ver §21.6). Decisión pendiente: reintegrar el sistema de "tiempo de cuerda" o eliminar la referencia.
+### 21.2 Desviaciones del GDD 🟡 (pendientes al 2026-04-19)
 
-### 21.2 Desviaciones del GDD (código vs GDD v3.0) 🟡
+| Área | Estado | Acción pendiente |
+|---|---|---|
+| ~~Joint del gancho~~ | ✅ `DistanceJoint2D` con `maxDistanceOnly=true` | — |
+| ~~`moveSpeed`/`jumpForce` visibilidad~~ | ✅ `[SerializeField] private` | — |
+| ~~`jumpCooldown`~~ | ✅ Removido | — |
+| ~~Control del aire~~ | ✅ `MoveTowards` con `freeAirAccel=4`, preserva momentum | — |
+| ~~`snapRadius` efectivo~~ | ✅ 1.5u (default 1.5f, sin `*0.5`) | — |
+| ~~Cooldown si gancho falla~~ | ✅ 0.3s implementado | — |
+| ~~`hookGravity` en vuelo~~ | ✅ 18 u/s², trayectoria parabólica | — |
+| ~~`swingDamping`~~ | ✅ 0.02 (98%/frame) | — |
+| ~~Feature "Rebote"~~ | ✅ Removida | — |
+| ~~Input System package~~ | ✅ Decisión: quedarse con `Input.GetKey` legacy | Desinstalar package desde Unity Editor |
+| `moveSpeed` valor script | 🟡 Default 12 (GDD: 8–10) | Ajustar Inspector a 8–10 |
+| `jumpForce` valor Inspector | 🟡 Puede ser 15 en escena | Verificar Inspector → poner 12 |
+| `fallGravity` Inspector | 🟡 Puede ser 1.5 en escena | Ajustar a 5.5 |
+| Colisionador player | 🟡 Puede ser 1×2 en escena | Ajustar a 0.5u×1u en Inspector |
+| Layer del gancho | 🟡 `Grapple` (layer 6) | Renombrar → `Grappleable` en Unity Editor |
+| Layers faltantes | 🟡 Faltan Obstacle, Enemy, Hazard, Collectible | Crear en Unity Editor |
+| `obstacleMask` (nuevo) | 🟡 Field existe, no asignado en Inspector | Asignar `Floor` (mínimo) desde Inspector |
 
-| Área | Código actual | Esperado GDD | Acción |
-|---|---|---|---|
-| Joint del gancho | `SpringJoint2D` (require + escena) | `DistanceJoint2D` | **Decidir con Bonio** (§21.7) |
-| `moveSpeed` valor script | 5 | 8–10 | Inspector ya tiene 8 — alinear default del script |
-| `jumpForce` valor escena | 15 | 12 | Bajar a 12 o justificar el 15 en GDD |
-| `fallGravity` escena | 1.5 | 5.5 | Tunear — la sensación actual de caída es lenta |
-| Colisionador player | CapsuleCollider2D 1×2 | Cápsula 0.5u×1u | Escalar al tamaño del GDD |
-| `moveSpeed`/`jumpForce` visibilidad | `public` | `[SerializeField] private` | Refactor |
-| `jumpCooldown` | Existe (0.2s en escena) | No existe en GDD | Remover |
-| Control del aire | Full (reasigna `linearVelocity.x` siempre) | Mínimo | Blend con input en aire, no reemplazo |
-| `snapRadius` efectivo en vuelo | 2u (`snapRadius * 0.5` con snapRadius=4) | 1.5u | Alinear |
-| Cooldown si gancho falla | No implementado | 0.3s | Implementar |
-| `hookGravity` en vuelo | No existe (hook viaja con `MoveTowards` lineal) | 18 (GDD §5.2) | Cambiar trayectoria a parabólica con gravedad |
-| `swingDamping` | `linearDamping = 0.8` | 98 % retenido/frame ≈ damping 0.02 | Recalibrar |
-| Feature "Rebote" (`bounceLayerMask`) | Implementada | **No está en GDD** | Decidir: subir a GDD o remover |
-| Input | `Input.GetKey` legacy | Input System (package instalado 1.11.2, `InputSystem_Actions.inputactions` existe) | Migrar o desinstalar el package |
-| Layer del gancho | `Grapple` (layer 6) | `Grappleable` | Renombrar layer |
-| Layers faltantes | Default, Floor, UI, Grapple, Player | + Obstacle, Enemy, Hazard, Collectible | Crear 4 layers |
-| Tags | Floor, Player, MainCamera | + Checkpoint no aplica (GDD §3 sin checkpoints) | Sumar según features |
+### 21.3 Bugs lógicos
 
-### 21.3 Bugs lógicos 🟡
-
-1. **`CamaraScript.cs` línea 31** — `rb = GetComponent<Rigidbody2D>()` toma el RB de la cámara, no del player. Como la cámara no es un cuerpo dinámico, `rb.linearVelocityY` siempre es ≈0 y el **look-down por caída nunca se activa**. Debe ser `player.GetComponent<Rigidbody2D>()` en `Start`. Consecuencia del bug: el `[RequireComponent(typeof(Rigidbody2D))]` en la cámara también sobra.
-2. **`CamaraScript.cs` líneas 54-64 vs 69-79** — Bloque de cálculo de look-down duplicado idénticamente dentro del mismo `FixedUpdate`. Se ejecuta dos veces por frame. Eliminar uno.
-3. **`CamaraScript.cs` línea 38** — `cam.orthographicSize = orthoSize` asignado en cada `Update` sin condición. Mover a `OnValidate` o a `Start` si no cambia en runtime.
-4. **`GrappleScript.cs`** — `[SerializeField] private Camera cam` existe en el segundo bloque duplicado y está asignado en la escena (`fileID: 519420031`), pero `GrappleLaunch()` usa `Camera.main`. Decidir uno y eliminar el otro para evitar desincronización.
-5. **`GrappleScript.cs`** — Campos serializados huérfanos en la escena: `ropeProgressionSpeed: 6.7` **no existe** como field en el script. Valor perdido silenciosamente.
-6. **`PlayerMovement.cs`** — Campos serializados huérfanos en la escena: `maxGrappleTime: 5`, `image`, `counterForce: 0.7` no existen en el script. Igual que arriba: datos perdidos.
-7. **Componente duplicado en Player (escena)** — Hay **dos instancias de `MonoBehaviour PlayerMovement`** en el GameObject Player (fileID 981785610 aparece dos veces con valores ligeramente distintos: uno con `counterForce: 0.7`, otro sin). Posible artefacto de edición — revisar Inspector y borrar la segunda.
-8. **`MovingPlatform.cs`** — Usa `Mathf.Sin(Time.fixedTime * speed)`, movimiento senoidal (aceleración variable). El GDD habla de "trayectoria lineal/circular/pendular" y "velocidad relativa" — aceptable como pendular pero la implementación lineal requiere otro enfoque. Sin Kinematic2D ni parentado, el player no hereda velocidad al pararse encima.
-9. **`VoidScript.cs`** — `SceneManager.LoadScene(GetActiveScene().buildIndex)` funciona pero no hay fade-out (<0.5s según GDD §3). Reinicio instantáneo y crudo.
-10. **`PlayerMovement.cs`** — `isGrounded` se calcula en `Update` (es lectura de física). Debería estar en `FixedUpdate` o al menos cacheado. Funciona, pero rompe la regla §15 del CLAUDE.
+1. ~~`CamaraScript.cs` — `rb` de la cámara en lugar del player~~ → **✅ Arreglado.** `player.GetComponent<Rigidbody2D>()` en `Start`.
+2. ~~`CamaraScript.cs` — bloque look-down duplicado~~ → **✅ Eliminado.**
+3. ~~`CamaraScript.cs` — `orthographicSize` en Update~~ → **✅ Movido a `Start`.**
+4. ~~`GrappleScript.cs` — camera duplicada~~ → **✅ Resuelto al eliminar el bloque duplicado.**
+5. ~~`GrappleScript.cs` — `ropeProgressionSpeed` huérfano en escena~~ → 🟡 **Pendiente limpiar en Inspector.**
+6. ~~`PlayerMovement.cs` — `maxGrappleTime`, `image`, `counterForce` huérfanos~~ → **✅ Resueltos** (campos eliminados del script).
+7. ~~Componente `PlayerMovement` duplicado en Player (escena)~~ → 🟡 **Pendiente eliminar desde Inspector.**
+8. **`MovingPlatform.cs`** — Sin `Kinematic` ni parentado, player no hereda velocidad. 🟡 Pendiente (Fase 2).
+9. **`VoidScript.cs`** — Sin fade-out. 🟡 Pendiente — se resuelve al crear `LevelManager` (Sesión 4).
+10. ~~`isGrounded` en `Update`~~ → **✅ Movido a `FixedUpdate`.**
+11. ~~`OverlapBox` del groundCheck hardcodeado~~ → **✅ Reemplazado por `groundCheckWidth=0.45f` / `groundCheckHeight=0.05f` SerializeField.** Gizmo ahora muestra tamaño real y cambia rojo/verde según estado.
 
 ### 21.4 Features del GDD NO implementadas ⚪
 
@@ -527,61 +528,70 @@ El proyecto **no compila tal cual está**. Arreglar antes de cualquier otra tare
 **Niveles:** 5 de 6 faltan + Arena del Golem. Solo hay `SampleScene` con placeholders.
 **Arte:** Sin tileset 8×8, sin sprites de enemigos/Golem, sin animaciones. Assets actuales: círculos (`Circle.prefab`), cuadrados, placeholder `Tiempo de Cuerda`, material de cuerda.
 **Audio:** No hay módulo, no hay SFX, no hay música. AudioSource no presente en escena.
-**Input:** Input System con `InputSystem_Actions.inputactions` sin conectar al código.
-**Señalización grappleable:** GDD pide highlight verde a <8u. No implementado.
+**Input:** ✅ Decisión cerrada — quedarse con `Input.GetKey` legacy. Desinstalar package desde Unity Editor.
+**Señalización grappleable:** Highlight implementado al cargar el gancho (rango `maxGrappleDistance`). Pendiente: pulso verde a <8u en todo momento (Fase 3).
 
 ### 21.5 Lo que funciona y conviene conservar ✅
 
-- **Estructura de estados del gancho** (`idle/launching/attached/retracting`) — clara y funcional.
-- **Coyote time (0.12s), jump buffer (0.15s), jump cut (0.5), gravedad variable** — implementación correcta y alineada al GDD §4.1.
-- **LineRenderer con Bezier cuadrática + animación de onda** con `AnimationCurve` — visualmente alineado al GDD §5.3. Cuidar segmentos: script default 20, escena 80.
-- **Snap de enganche por OverlapCircle alrededor del hook en vuelo** — mejor UX que enganchar solo al punto exacto del mouse.
-- **Gizmos de debug del gancho** (rango blanco, snapRadius amarillo, punto verde, hook cian, cuerda azul) — excelente para tuning, mantener.
-- **Look-behind horizontal de cámara por input** — buena feature de juice, mantener.
-- **`VoidScript` + fosos** — reset instantáneo coherente con "sin vidas" (§3). Solo falta el fade.
-- **Capsule collider y Rigidbody2D con FreezeRotationZ** — configuración correcta en escena.
+- **Estados del gancho** (`idle/charging/launching/attached/retracting`) — flujo completo y funcional.
+- **Coyote time (0.12s), jump buffer (0.15s), jump cut, gravedad variable** — alineado al GDD §4.1.
+- **Momentum jump** (`jumpHBoost=4`, `jumpHBoostThreshold=0.8`) — boost horizontal al saltar en carrera.
+- **Swing jump boost** (`swingJumpWindow=0.2s`, `swingJumpBoostMult=1.3`) — +30% altura al saltar post-gancho. Refuerza pilar "movimiento encadenado".
+- **Carga del gancho** (click sostenido → `minGrappleDistance` a `maxGrappleDistance`) — añade skill expression. Subir a GDD v3.1.
+- **Climb de cuerda** (W/S mientras enganchado, `climbSpeed=6`) — subir/bajar por la cuerda. Subir a GDD v3.1.
+- **Trayectoria parabólica del hook** (`hookGravity=18`) — arco realista alineado al GDD §5.2.
+- **Linecast de colisión** (grappleable + obstacleMask) — hook rebota en sólidos no-grappleables, retrae con cooldown 0.3s.
+- **Highlight al cargar** (rango maxGrappleDistance, color amarillo) — señalización grappleable activa.
+- **LineRenderer Bezier cuadrática + onda** con `AnimationCurve` — alineado GDD §5.3. Segmentos: default 20, escena 80.
+- **Gizmos de debug** (rango blanco, snapRadius amarillo, punto verde, hook cian, cuerda azul) — excelente para tuning.
+- **groundCheck SerializeField** (`groundCheckWidth=0.45`, `groundCheckHeight=0.05`), gizmo rojo/verde en Play mode.
+- **Look-behind horizontal de cámara**, **look-down por caída** (ambos funcionando post-bugfix).
+- **CapsuleCollider2D + FreezeRotationZ** — configuración correcta.
 
 ### 21.6 Escena y assets
 
 - **Escena única:** `Assets/Scenes/SampleScene.unity` (~2755 líneas YAML).
 - **Prefabs:** `Circle.prefab` (placeholder genérico, escala 0.5, SpriteRenderer).
 - **Materiales:** `Cuerda.mat` + `Cuerda.png` (material del LineRenderer).
-- **Escena contiene:** Player (CapsuleCollider 1×2, Rigidbody2D, SpringJoint2D, LineRenderer, PlayerMovement×2 duplicado, GrappleScript), GroundCheker (hijo del player), CamaraFollow + Main Camera (CamaraScript), Square×3 (Floor), Circle×8 (Grapple layer 6), PatrolPoint×2 (sin componente de AI), Tiempo de Cuerda(PlaceHolder) (UI Image referenciada por PlayerMovement), Void (trigger de reset con VoidScript), Global Light 2D, EventSystem.
-- **Layers definidas:** Default(0), TransparentFX(1), Ignore Raycast(2), Floor(3), Water(4), UI(5), Grapple(6), Player(7). **Falta renombrar Grapple→Grappleable y crear Obstacle, Enemy, Hazard, Collectible.**
-- **Tags definidos:** Floor, Player, MainCamera. Falta crear tags para Checkpoint (no aplica por §3), Collectible, Exit, etc.
+- **Escena contiene:** Player (CapsuleCollider — verificar tamaño 0.5×1u, Rigidbody2D, DistanceJoint2D, LineRenderer, PlayerMovement, GrappleScript), GroundChecker (hijo del player), CamaraFollow + Main Camera (CamaraScript), Square×3 (Floor), Circle×8 (layer Grapple→renombrar Grappleable), PatrolPoint×2 (sin AI aún), Void (VoidScript), Global Light 2D, EventSystem.
+- **Layers definidas:** Default(0), TransparentFX(1), Ignore Raycast(2), Floor(3), Water(4), UI(5), Grapple(6), Player(7). **Pendiente en Editor: renombrar Grapple→Grappleable, crear Obstacle, Enemy, Hazard, Collectible.**
 - **Sorting Layers:** solo "Default". Agregar Background/Foreground cuando entre el arte.
-- **Valores del Inspector sobre Player** (prevalecen sobre defaults del script):
-  - `moveSpeed: 8`, `jumpForce: 15`, `fallGravity: 1.5`, `jumpCooldown: 0.2`.
-  - `GrappleScript`: `maxGrappleDistance: 15`, `launchSpeed: 25`, `retractSpeed: 25`, `maxSwingVelocity: 20`, `segments: 80`, `grappleLayerMask: 64 (Grapple)`, `hookPrefab: Circle.prefab`.
-  - `SpringJoint2D`: `AutoConfigureConnectedAnchor: 0`, `AutoConfigureDistance: 1`, `MaxDistanceOnly: 0`, `EnableCollision: 0`, `Distance: 4.83`.
+- **Valores del Inspector — verificar y alinear:**
+  - `PlayerMovement`: `moveSpeed: 8–10`, `jumpForce: 12`, `fallGravity: 5.5`. Eliminar `jumpCooldown` si queda en escena.
+  - `GrappleScript`: `snapRadius: 1.5`, `swingDamping: 0.02`, `hookGravity: 18`, `maxFlightTime: 0.6`, `failCooldown: 0.3`. Asignar `obstacleMask` (Floor mínimo). `grappleLayerMask`: actualizar a layer Grappleable cuando se renombre.
+  - `CapsuleCollider2D`: `size: (0.5, 1)`.
+  - Eliminar `ropeProgressionSpeed` huérfano de la escena si persiste.
 
-### 21.7 Decisiones abiertas (requieren Bonio)
+### 21.7 Decisiones cerradas (2026-04-19)
 
-1. **`SpringJoint2D` vs `DistanceJoint2D`** — El GDD §5 dice DistanceJoint2D (péndulo rígido tipo Terraria). El código usa SpringJoint2D (elástico, permite estirar/comprimir). **Probar ambos con el feel actual y elegir.** Recomendación técnica: DistanceJoint2D con `maxDistanceOnly = true` da el comportamiento "cuerda" más predecible y coincide con referentes.
-2. **Feature "Rebote" del gancho** — Implementada en `GrappleScript.UpdateLaunching()` usando `bounceLayerMask` + `Vector2.Reflect`. No figura en GDD. ¿Es una mecánica que querés promover (y documentar en GDD §5) o fue experimental y descartable?
-3. **Sistema "Tiempo de Cuerda"** — La escena serializa `image` (UI fill) y `maxGrappleTime: 5` en PlayerMovement. No existe en el script, pero alguien empezó a cablearlo. ¿Se resucita como mecánica de "cuerda con timer" (no en GDD) o se borra?
-4. **Input legacy vs Input System** — Package instalado, `.inputactions` creado, pero código usa `Input.GetKey`. Definir antes de tocar Controles (GDD §4.2 lista gamepad; el legacy Input requiere más boilerplate para gamepad).
-5. **Componentes duplicados en Player** — Dos `PlayerMovement` en el mismo GameObject. Probablemente un bug de merge o arrastre accidental. Confirmar cuál quedarse.
-6. **Organización de scripts** — `PlayerMovement` y `GrappleScript` están en `Assets/Scripts/`; `CamaraScript`, `MovingPlatform`, `VoidScript` en la raíz de `Assets/`. Consolidar en `Assets/Scripts/` con subcarpetas (Player, Camera, World, Enemies, Systems).
+1. ~~`SpringJoint2D` vs `DistanceJoint2D`~~ → **✅ DistanceJoint2D** con `maxDistanceOnly=true`.
+2. ~~Feature "Rebote"~~ → **✅ Removida.**
+3. ~~Sistema "Tiempo de Cuerda"~~ → **✅ Descartado.** Fields eliminados del script.
+4. ~~Input legacy vs Input System~~ → **✅ Quedarse con `Input.GetKey` legacy.** Desinstalar package desde Unity Editor.
+5. ~~Componente `PlayerMovement` duplicado~~ → **🟡 Pendiente eliminar desde Inspector.**
+6. ~~Organización de scripts~~ → **🟡 Pendiente mover desde Editor** (subcarpetas Player, Camera, World, Enemies, Systems).
+7. **4 features nuevas** (carga gancho, climb, swing jump, momentum jump) → **✅ Mantener. Pendiente documentar en GDD v3.1.**
 
 ### 21.8 Plan priorizado rumbo a Parcial 1
 
 > Orientado a MVP jugable. Cada grupo es revisable por Bonio antes de avanzar al siguiente.
 
-**Fase 0 — Desbloqueo (crítico, 1 sesión):**
-1. Arreglar compilación: dedupe de fields en `GrappleScript`; decidir qué hacer con `image`/`grappleTime` en `PlayerMovement`.
-2. Arreglar bug del `rb` en `CamaraScript`; eliminar bloque duplicado.
-3. Eliminar componente `PlayerMovement` duplicado del Player en escena.
-4. Cerrar decisiones §21.7.1 y §21.7.4 (joint y input).
+**Fase 0 — Desbloqueo ✅ COMPLETO:**
+1. ✅ Compilación arreglada (GrappleScript dedupe, PlayerMovement image/grappleTime).
+2. ✅ Bugs CamaraScript arreglados (rb, duplicado, orthographicSize).
+3.✅ Eliminar `PlayerMovement` duplicado del Player en escena (hacer en Inspector).
+4. ✅ Decisiones de joint e input cerradas.
 
-**Fase 1 — Alineación con GDD (1–2 sesiones):**
-5. Refactor de visibilidad: `public` → `[SerializeField] private` en `PlayerMovement`.
-6. Consolidar scripts en `Assets/Scripts/` con subcarpetas.
-7. Renombrar layer `Grapple` → `Grappleable`. Crear `Obstacle`, `Enemy`, `Hazard`, `Collectible`.
-8. Alinear valores del Inspector a GDD: `jumpForce` 15→12, `fallGravity` 1.5→5.5, colisionador 1×2→0.5×1, `snapRadius` efectivo → 1.5u.
-9. Implementar cooldown 0.3s si el gancho falla.
-10. Remover o promocionar la feature "Rebote" (§21.7.2).
-11. Quitar `jumpCooldown` o re-justificarlo.
+**Fase 1 — Alineación con GDD ✅ MAYORMENTE COMPLETO:**
+5. ✅ Visibilidad `[SerializeField] private` en `PlayerMovement`.
+6. 🟡 Consolidar scripts en subcarpetas (hacer desde Editor).
+7. ✅ Renombrar `Grapple` → `Grappleable`. Crear layers `Obstacle`, `Enemy`, `Hazard`, `Collectible` (hacer desde Editor).
+8. ✅ `snapRadius` 1.5u, cooldown 0.3s, `hookGravity` 18, `swingDamping` 0.02. 🟡 Inspector: verificar `jumpForce`→12, `fallGravity`→5.5, colisionador→0.5×1.
+9. ✅ Cooldown 0.3s implementado.
+10. ✅ Feature "Rebote" removida.
+11. ✅ `jumpCooldown` removido.
+12. ✅ `obstacleMask`: hook colisiona con todo sólido, retrae en no-grappleables.
+13. ✅ `groundCheckWidth/Height` SerializeField (default 0.45×0.05). Gizmo rojo/verde.
 
 **Fase 2 — MVP (2–3 sesiones, pre-Parcial 1):**
 12. `LevelManager.cs` con fade-out muerte <0.5s, reinicio <2s, contador de muertes.
@@ -626,8 +636,8 @@ Todo lo no listado (Niveles 2-6, Lanzador, Golem, audio definitivo, arte final) 
 
 | # | Necesidad MVP | Estado | Acción |
 |---|---|---|---|
-| 1 | Proyecto compila | 🔴 No | Fase 0 — dedupe fields |
-| 2 | Player alineado al GDD | 🟡 Parcial | Edits §22.4.1 y §22.4.2 |
+| 1 | Proyecto compila | ✅  | Fase 0 — dedupe fields |
+| 2 | Player alineado al GDD | ✅ | Edits §22.4.1 y §22.4.2 |
 | 3 | Cámara sin bugs | 🟡 Bug `rb` | Edit §22.4.3 |
 | 4 | Layers correctas | 🟡 Grapple→Grappleable + 4 nuevas | §23.3 |
 | 5 | Input coherente | 🟡 Legacy vs System | Decisión §21.7.4 |

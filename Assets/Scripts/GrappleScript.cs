@@ -13,11 +13,21 @@ public class GrappleScript : MonoBehaviour
     [SerializeField] private float maxSwingVelocity = 15f;
     [Tooltip("Layers que el gancho puede enganchar. Asignar la layer Grappleable.")]
     [SerializeField] private LayerMask grappleLayerMask;
+    [Tooltip("Layers sólidas que bloquean el hook pero NO permiten enganche. El gancho rebota y retrae con cooldown. Asignar Floor, Obstacle, etc. GDD §13.2.")]
+    [SerializeField] private LayerMask obstacleMask;
 
     [Tooltip("Velocidad a la que el hook viaja desde el jugador hasta el punto objetivo (u/s).")]
     [SerializeField] private float launchSpeed = 20f;
     [Tooltip("Velocidad a la que el hook regresa al jugador al retraer la cuerda (u/s).")]
     [SerializeField] private float retractSpeed = 25f;
+    [Tooltip("Gravedad aplicada al hook en vuelo. Curva la trayectoria como un lanzamiento real (u/s²). GDD §5.2.")]
+    [SerializeField] private float hookGravity = 18f;
+    [Tooltip("Tiempo máximo de vuelo antes de considerar fallo y retraer (segundos). GDD §5.2 pide 0.3–0.5s.")]
+    [SerializeField] private float maxFlightTime = 0.6f;
+    [Tooltip("Cooldown tras fallar el lanzamiento antes de poder volver a cargar el gancho (segundos). GDD §5.2.")]
+    [SerializeField] private float failCooldown = 0.3f;
+    private float cooldownTimer = 0f;
+    private float flightTimer   = 0f;
 
     [HideInInspector] public DistanceJoint2D joint;
     private Rigidbody2D rb;
@@ -53,12 +63,12 @@ public class GrappleScript : MonoBehaviour
     private readonly List<Color>          originalColors        = new List<Color>();
 
     [Header("Snap")]
-    [Tooltip("Radio en el que el hook detecta superficies grappleables durante el vuelo y se engancha automáticamente (unidades). Valor efectivo = snapRadius × 0.5.")]
-    [SerializeField] private float snapRadius = 4f;
+    [Tooltip("Radio en el que el hook detecta superficies grappleables durante el vuelo y se engancha automáticamente (unidades). GDD §5.2 = 1.5u.")]
+    [SerializeField] private float snapRadius = 1.5f;
 
     [Header("Swing")]
-    [Tooltip("Resistencia al movimiento del péndulo (rb.linearDamping mientras está enganchado). 0 = sin pérdida de energía, valores altos frenan rápido.")]
-    [SerializeField] private float swingDamping = 0.05f;
+    [Tooltip("Resistencia al movimiento del péndulo (rb.linearDamping mientras está enganchado). GDD §5.2 ≈ 0.02 = 98% de energía retenida por frame.")]
+    [SerializeField] private float swingDamping = 0.02f;
 
     [Header("Escalado de Cuerda")]
     [Tooltip("Velocidad a la que el jugador sube o baja por la cuerda presionando W/S (u/s).")]
@@ -155,7 +165,10 @@ public class GrappleScript : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Mouse0) && (state == GrappleState.idle || state == GrappleState.retracting))
+        if (cooldownTimer > 0f)
+            cooldownTimer -= Time.deltaTime;
+
+        if (Input.GetKeyDown(KeyCode.Mouse0) && cooldownTimer <= 0f && (state == GrappleState.idle || state == GrappleState.retracting))
         {
             state = GrappleState.charging;
             chargeTimer = 0f;
@@ -233,21 +246,49 @@ public class GrappleScript : MonoBehaviour
 
     private void UpdateLaunching()
     {
-        hookCurrentPos = Vector2.MoveTowards(hookCurrentPos, grapplePoint, launchSpeed * Time.deltaTime);
+        Vector2 prevPos = hookCurrentPos;
+
+        // Trayectoria parabólica: integra velocidad con gravedad (GDD §5.2, hookGravity = 18)
+        hookVelocity += Vector2.down * hookGravity * Time.deltaTime;
+        hookCurrentPos += hookVelocity * Time.deltaTime;
+        flightTimer += Time.deltaTime;
         UpdateLine(hookCurrentPos);
 
-        // Chequear enganche — collider grappleable cerca del gancho
-        Collider2D grappleable = Physics2D.OverlapCircle(hookCurrentPos, snapRadius * 0.5f, grappleLayerMask);
-        if (grappleable != null)
+        // Linecast prevPos → hookCurrentPos: detecta cualquier superficie sólida
+        // Evita tunelización a alta velocidad y resuelve grappleable vs obstacle en el mismo chequeo
+        LayerMask combinada = grappleLayerMask | obstacleMask;
+        RaycastHit2D hit = Physics2D.Linecast(prevPos, hookCurrentPos, combinada);
+        if (hit.collider != null)
         {
-            Vector2 snapPoint = grappleable.ClosestPoint(hookCurrentPos);
-            SnapAndAttach(snapPoint);
+            bool esGrappleable = ((1 << hit.collider.gameObject.layer) & grappleLayerMask) != 0;
+            if (esGrappleable)
+            {
+                SnapAndAttach(hit.point);
+            }
+            else
+            {
+                // Superficie sólida no-grappleable (Floor, Obstacle, etc.) → retrae con cooldown
+                cooldownTimer = failCooldown;
+                GrappleRetract();
+            }
             return;
         }
 
-        // Llegó al destino sin encontrar nada — retraer
-        if (Vector2.Distance(hookCurrentPos, grapplePoint) < 0.1f)
+        // Snap assist: si ningún linecast impactó, buscar grappleable cercano al hook
+        Collider2D snap = Physics2D.OverlapCircle(hookCurrentPos, snapRadius, grappleLayerMask);
+        if (snap != null)
+        {
+            SnapAndAttach(snap.ClosestPoint(hookCurrentPos));
+            return;
+        }
+
+        // Falla: tiempo excedido o fuera del rango máximo — retraer con cooldown
+        float distFromPlayer = Vector2.Distance(hookCurrentPos, transform.position);
+        if (flightTimer >= maxFlightTime || distFromPlayer > maxGrappleDistance)
+        {
+            cooldownTimer = failCooldown;
             GrappleRetract();
+        }
     }
 
     private void UpdateLine(Vector2 gancho)
@@ -296,6 +337,8 @@ public class GrappleScript : MonoBehaviour
         grapplePoint = origin + direction * effectiveDistance;
 
         hookCurrentPos = origin;
+        hookVelocity   = direction * launchSpeed;
+        flightTimer    = 0f;
         if (currentHook != null) Destroy(currentHook);
         if (hookPrefab != null)
         {

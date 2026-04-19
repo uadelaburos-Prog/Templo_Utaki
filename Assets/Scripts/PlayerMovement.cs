@@ -31,8 +31,8 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float halfGravThreshold = 5f;
 
     [Header("Salto")]
-    [Tooltip("Velocidad vertical inicial al saltar (u/s).")]
-    [SerializeField] private float jumpForce    = 13f;
+    [Tooltip("Velocidad vertical inicial al saltar (u/s). GDD §4.1.")]
+    [SerializeField] private float jumpForce    = 12f;
     [Tooltip("Velocidad vertical mínima sostenida mientras se mantiene Espacio durante el salto variable.")]
     [SerializeField] private float varJumpSpeed = 11f;
     [Tooltip("Duración máxima del salto variable sosteniendo Espacio (segundos).")]
@@ -63,6 +63,10 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private LayerMask mask;
     [Tooltip("Transform hijo del jugador desde el que se lanza el OverlapBox de detección de suelo.")]
     [SerializeField] private Transform groundCheck;
+    [Tooltip("Ancho del OverlapBox de detección de suelo. Debe coincidir con el ancho del CapsuleCollider2D del player (GDD §4.1: 0.5u). Reducir levemente evita falsos positivos en paredes.")]
+    [SerializeField] private float groundCheckWidth = 0.45f;
+    [Tooltip("Alto del OverlapBox de detección de suelo. Valor pequeño detecta solo contacto inmediato con el suelo.")]
+    [SerializeField] private float groundCheckHeight = 0.05f;
 
     private GrappleScript grapple;
     public bool isHanging => grapple.isGrappling;
@@ -158,7 +162,7 @@ public class PlayerMovement : MonoBehaviour
 
     void FixedUpdate()
     {
-        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(1f, 1f), 0f, mask);
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(groundCheckWidth, groundCheckHeight), 0f, mask);
 
         // --- MOVIMIENTO HORIZONTAL ---
         if (isGrounded)
@@ -220,7 +224,7 @@ public class PlayerMovement : MonoBehaviour
     private void OnDrawGizmos()
     {
         if (groundCheck == null) return;
-        Gizmos.color = Color.red;
-        Gizmos.DrawCube(groundCheck.position + Vector3.down * 0.1f, new Vector3(0.5f, 0.1f, 0f));
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+        Gizmos.DrawWireCube(groundCheck.position, new Vector3(groundCheckWidth, groundCheckHeight, 0f));
     }
 }
