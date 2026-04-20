@@ -56,6 +56,12 @@ public class PlayerMovement : MonoBehaviour
     [Tooltip("Multiplicador de jumpForce al saltar dentro de la ventana swing jump. 1.3 = +30% de altura.")]
     [SerializeField] private float swingJumpBoostMult = 1.3f;
 
+    [Header("Control en Aire")]
+    [Tooltip("Ventana de tiempo tras saltar en la que se aplica control horizontal activo (segundos).")]
+    [SerializeField] private float airControlTime  = 0.5f;
+    [Tooltip("Aceleración horizontal durante la ventana de control en aire (u/s²). Fuera de la ventana se usa freeAirAccel.")]
+    [SerializeField] private float airControlAccel = 60f;
+
     [Header("Suelo")]
     private bool isGrounded;
     public bool IsGrounded => isGrounded;
@@ -71,6 +77,9 @@ public class PlayerMovement : MonoBehaviour
     private GrappleScript grapple;
     public bool isHanging => grapple.isGrappling;
 
+    private Animator        anim;
+    private SpriteRenderer  sr;
+
     private float inputX          = 0f;
     private bool  jumpHeld        = false;
     private float coyoteTimer     = 0f;
@@ -79,11 +88,14 @@ public class PlayerMovement : MonoBehaviour
     private bool  varJumpActive   = false;
     private bool  wasHanging      = false;
     private float swingJumpTimer  = 0f;
+    private float airControlTimer = 0f;
 
     void Start()
     {
         rb      = GetComponent<Rigidbody2D>();
         grapple = GetComponent<GrappleScript>();
+        anim    = GetComponent<Animator>();
+        sr      = GetComponent<SpriteRenderer>();
     }
 
     void Update()
@@ -94,6 +106,11 @@ public class PlayerMovement : MonoBehaviour
 
         jumpHeld = Input.GetKey(KeyCode.Space);
 
+        anim.SetBool("IsRunning", isGrounded && inputX != 0f);
+
+        if (inputX != 0f)
+            sr.flipX = inputX < 0f;
+
         // --- DETECCIÓN DE SOLTAR GANCHO → abre ventana swing jump ---
         bool hangingNow = isHanging;
         if (wasHanging && !hangingNow)
@@ -102,6 +119,9 @@ public class PlayerMovement : MonoBehaviour
 
         if (swingJumpTimer > 0f)
             swingJumpTimer -= Time.deltaTime;
+
+        if (airControlTimer > 0f)
+            airControlTimer -= Time.deltaTime;
 
         // --- COYOTE TIME ---
         if (isGrounded)
@@ -136,6 +156,7 @@ public class PlayerMovement : MonoBehaviour
             jumpBufferTimer = 0f;
             coyoteTimer     = 0f;
             swingJumpTimer  = 0f;
+            airControlTimer = airControlTime;
         }
 
         // --- SALTO VARIABLE (VarJump) ---
@@ -165,17 +186,7 @@ public class PlayerMovement : MonoBehaviour
         isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(groundCheckWidth, groundCheckHeight), 0f, mask);
 
         // --- MOVIMIENTO HORIZONTAL ---
-        if (isGrounded)
-        {
-            float targetX = inputX * moveSpeed;
-            bool  sameDir = inputX != 0 && Mathf.Sign(inputX) == Mathf.Sign(rb.linearVelocity.x);
-            float accel   = sameDir ? groundAccel : groundDecel;
-            rb.linearVelocity = new Vector2(
-                Mathf.MoveTowards(rb.linearVelocity.x, targetX, accel * Time.fixedDeltaTime),
-                rb.linearVelocity.y
-            );
-        }
-        else if (isHanging)
+        if (isHanging)
         {
             // Fuerza tangencial al arco — elimina equilibrio diagonal
             Vector2 anchorPos = grapple.joint.connectedAnchor;
@@ -183,10 +194,31 @@ public class PlayerMovement : MonoBehaviour
             Vector2 tangente  = new Vector2(-ropeDir.y, ropeDir.x);
             rb.AddForce(tangente * inputX * swingForce);
         }
+        else if (isGrounded)
+        {
+            // Recortar momentum del swing al aterrizar
+            if (Mathf.Abs(rb.linearVelocity.x) > moveSpeed)
+                rb.linearVelocity = new Vector2(Mathf.Sign(rb.linearVelocity.x) * moveSpeed, rb.linearVelocity.y);
+
+            if (inputX == 0f)
+            {
+                rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+            }
+            else
+            {
+                float targetX = inputX * moveSpeed;
+                bool  sameDir = Mathf.Sign(inputX) == Mathf.Sign(rb.linearVelocity.x);
+                float accel   = sameDir ? groundAccel : groundDecel;
+                rb.linearVelocity = new Vector2(
+                    Mathf.MoveTowards(rb.linearVelocity.x, targetX, accel * Time.fixedDeltaTime),
+                    rb.linearVelocity.y
+                );
+            }
+        }
         else
         {
-            // Aire libre: control casi nulo — preserva el momentum del swing
-            float targetX = inputX * moveSpeed;
+            float targetX     = inputX * moveSpeed;
+            float usedAirAccel = airControlTimer > 0f ? airControlAccel : freeAirAccel;
 
             bool tieneMomentum = inputX != 0
                 && Mathf.Sign(rb.linearVelocity.x) == Mathf.Sign(inputX)
@@ -194,7 +226,7 @@ public class PlayerMovement : MonoBehaviour
 
             if (!tieneMomentum)
                 rb.linearVelocity = new Vector2(
-                    Mathf.MoveTowards(rb.linearVelocity.x, targetX, freeAirAccel * Time.fixedDeltaTime),
+                    Mathf.MoveTowards(rb.linearVelocity.x, targetX, usedAirAccel * Time.fixedDeltaTime),
                     rb.linearVelocity.y
                 );
         }

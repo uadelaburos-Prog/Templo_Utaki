@@ -1,8 +1,5 @@
-using System;
 using System.Collections;
 using TMPro;
-using Unity.VisualScripting;
-using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -15,9 +12,9 @@ public class GameLoopManager : MonoBehaviour
     [SerializeField] int cristalesTotales;
 
     [Header("Muerte / Reinicio")]
-    [SerializeField] int contadorMuertes = 0;
-    float tiempoFadeOut = 0.1f;
-    float tiempoReinicio = 0f;
+    [SerializeField] int   contadorMuertes = 0;
+    [SerializeField] float tiempoFadeOut   = 0.4f;
+    [SerializeField] float tiempoReinicio  = 1.5f;
 
     [Header("Nivel")]
     [SerializeField] int nivelActual;
@@ -25,15 +22,15 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private CanvasGroup fadePanel;
-    [SerializeField] private TMP_Text txtCristales;
-    [SerializeField] private TMP_Text txtMuertes;
-    [SerializeField] private GameObject panelFinNivel;
-    [SerializeField] private GameObject panelPausa;
-    [SerializeField] private GameObject panelVictoria;
+    [SerializeField] private TMP_Text    txtCristales;
+    [SerializeField] private TMP_Text    txtMuertes;
+    [SerializeField] private GameObject  panelFinNivel;
+    [SerializeField] private GameObject  panelPausa;
+    [SerializeField] private GameObject  panelVictoria;
 
     private float tiempoAcumulado;
-    private int CristalesTotales;
-    private bool isPaused;
+    private int   cristalesAcumulados;
+    private bool  isPaused;
 
     private void Awake()
     {
@@ -42,11 +39,9 @@ public class GameLoopManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        else
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
+
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
     }
 
     private void OnEnable()
@@ -57,55 +52,59 @@ public class GameLoopManager : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
-    }  
+    }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        ActualizarHUBCristales();
+        ActualizarHUDCristales();
         StartCoroutine(FadeInConEspera());
     }
 
     private void Start()
     {
-        nivelActual = SceneManager.GetActiveScene().buildIndex;
-        totalNiveles = SceneManager.sceneCountInBuildSettings; // Restamos 1 para excluir la escena de menú
+        nivelActual  = SceneManager.GetActiveScene().buildIndex;
+        totalNiveles = SceneManager.sceneCountInBuildSettings;
 
-        txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
-        txtMuertes.text = $"Muertes: {contadorMuertes}";
+        ActualizarHUDCristales();
+        ActualizarHUDMuertes();
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+            TogglePause();
     }
 
     public void PlayerDied()
     {
         contadorMuertes++;
-        ActualizarHUBMuertes();
+        ActualizarHUDMuertes();
         StartCoroutine(RutinaReinicio());
     }
 
     public void CollectCrystal()
     {
         cristalesObtenidos++;
-        ActualizarHUBCristales();
+        ActualizarHUDCristales();
 
         if (cristalesObtenidos >= cristalesTotales)
-        {
             NivelCompleto();
-        }
     }
 
     public void NivelCompleto()
     {
-        tiempoAcumulado += Time.timeSinceLevelLoad;
-        CristalesTotales += cristalesObtenidos;
+        tiempoAcumulado     += Time.timeSinceLevelLoad;
+        cristalesAcumulados += cristalesObtenidos;
 
         ActualizarPanelFinNivel();
 
         panelFinNivel.SetActive(true);
-        Time.timeScale = 0f; // Pausa el juego
+        Time.timeScale = 0f;
     }
 
     public void ContinuarSiguienteNivel()
     {
-        Time.timeScale = 1f; // Reanuda el juego
+        Time.timeScale = 1f;
         panelFinNivel.SetActive(false);
 
         int siguienteNivel = nivelActual + 1;
@@ -116,7 +115,7 @@ public class GameLoopManager : MonoBehaviour
         }
         else
         {
-            nivelActual = siguienteNivel;
+            nivelActual        = siguienteNivel;
             cristalesObtenidos = 0;
             StartCoroutine(CargarEscenaConFade(siguienteNivel));
         }
@@ -138,7 +137,7 @@ public class GameLoopManager : MonoBehaviour
     public void MostrarVictoria()
     {
         panelVictoria.SetActive(true);
-        Time.timeScale = 0f; // Pausa el juego
+        Time.timeScale = 0f;
 
         ActualizarPanelVictoria();
     }
@@ -156,9 +155,7 @@ public class GameLoopManager : MonoBehaviour
         while (op.progress < 0.7f)
             yield return null;
 
-        yield return null;
-
-        cristalesObtenidos = 0;
+        cristalesObtenidos      = 0;
         op.allowSceneActivation = true;
 
         while (!op.isDone)
@@ -176,8 +173,6 @@ public class GameLoopManager : MonoBehaviour
 
         while (op.progress < 0.7f)
             yield return null;
-
-        yield return null;
 
         op.allowSceneActivation = true;
 
@@ -215,7 +210,6 @@ public class GameLoopManager : MonoBehaviour
 
     private IEnumerator FadeInConEspera()
     {
-        // Mantener pantalla en negro mientras Unity termina de renderizar
         fadePanel.gameObject.SetActive(true);
         fadePanel.alpha = 1f;
 
@@ -224,31 +218,29 @@ public class GameLoopManager : MonoBehaviour
         yield return StartCoroutine(FadeIn());
     }
 
-    private void ActualizarHUBCristales()
+    private void ActualizarHUDCristales()
     {
-        txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
-    }  
-    
-    private void ActualizarHUBMuertes()
+        if (txtCristales != null)
+            txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
+    }
+
+    private void ActualizarHUDMuertes()
     {
-        txtMuertes.text = $"Muertes: {contadorMuertes}";
+        if (txtMuertes != null)
+            txtMuertes.text = $"Muertes: {contadorMuertes}";
     }
 
     private void ActualizarPanelFinNivel()
     {
-       TMPro.TextMeshProUGUI resumen = panelFinNivel.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-       if(resumen != null)
-       {
-           resumen.text = $"Tiempo: {tiempoAcumulado:F2} segundos\nCristales: {cristalesObtenidos} / {cristalesTotales}";
-       }
-    }   
+        var resumen = panelFinNivel.GetComponentInChildren<TextMeshProUGUI>();
+        if (resumen != null)
+            resumen.text = $"Tiempo: {tiempoAcumulado:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}";
+    }
 
     private void ActualizarPanelVictoria()
     {
-        TMPro.TextMeshProUGUI resumen = panelVictoria.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+        var resumen = panelVictoria.GetComponentInChildren<TextMeshProUGUI>();
         if (resumen != null)
-        {
-            resumen.text = $"¡Felicidades!\nTiempo total: {tiempoAcumulado:F2} segundos\nCristales totales: {CristalesTotales}";
-        }
+            resumen.text = $"¡Felicidades!\nTiempo total: {tiempoAcumulado:F2}s\nCristales totales: {cristalesAcumulados}";
     }
 }
