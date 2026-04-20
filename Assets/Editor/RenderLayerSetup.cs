@@ -5,130 +5,111 @@ using UnityEngine.Tilemaps;
 
 public static class RenderLayerSetup
 {
-    // Orden de layers (atrás → frente):
-    // Background → BackgroundDeco → Default → Tilemap → Entities → Player → Foreground
+    static readonly string[] LayersNecesarias =
+        { "Background", "BackgroundDeco", "Tilemap", "Entities", "Player", "Foreground" };
 
     [MenuItem("Templo Utaki/Configurar Render Layers")]
     static void Configurar()
     {
-        // Verificar que las sorting layers existen
-        LogLayersDisponibles();
+        EnsurarSortingLayers();
 
         int cambios = 0;
 
-        // ── Tilemaps ──────────────────────────────────────────────
-        var tilemapRenderers = Object.FindObjectsByType<TilemapRenderer>(FindObjectsSortMode.None);
-        Debug.Log($"[RenderLayerSetup] Tilemaps encontrados: {tilemapRenderers.Length}");
-
-        foreach (var tr in tilemapRenderers)
+        foreach (var tr in Object.FindObjectsByType<TilemapRenderer>(FindObjectsSortMode.None))
         {
             string nombre = tr.gameObject.name.ToLower();
             string layer;
-            int    order;
 
-            Debug.Log($"[RenderLayerSetup] Procesando Tilemap: '{tr.gameObject.name}'");
-
-            if (ContieneCualquiera(nombre, "fondo", "back", "bg", "cielo", "sky", "barfondo"))
-            {
-                layer = "Background"; order = 0;
-            }
+            if (ContieneCualquiera(nombre, "fondo", "back", "bg", "cielo", "sky"))
+                layer = "Background";
             else if (ContieneCualquiera(nombre, "deco", "decorado") && !nombre.Contains("delante"))
-            {
-                layer = "BackgroundDeco"; order = 0;
-            }
+                layer = "BackgroundDeco";
             else if (ContieneCualquiera(nombre, "delante", "front", "foreground"))
-            {
-                layer = "Foreground"; order = 0;
-            }
+                layer = "Foreground";
             else
-            {
-                // Todo tilemap que no matchee → Tilemap (suelos, plataformas, collision, etc.)
-                layer = "Tilemap"; order = 0;
-            }
+                layer = "Tilemap";
 
-            if (AplicarLayer(tr, layer, order))
-            {
-                cambios++;
-                Debug.Log($"[RenderLayerSetup] '{tr.gameObject.name}' → {layer}");
-            }
+            if (AsignarLayer(tr, layer)) cambios++;
             ResetZ(tr.transform);
         }
 
-        // ── SpriteRenderers ───────────────────────────────────────
-        var spriteRenderers = Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None);
-        Debug.Log($"[RenderLayerSetup] SpriteRenderers encontrados: {spriteRenderers.Length}");
-
-        foreach (var sr in spriteRenderers)
+        foreach (var sr in Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
         {
             string nombre = sr.gameObject.name.ToLower();
             string layer;
-            int    order;
 
-            if (ContieneCualquiera(nombre, "fondo", "background", "bg", "barfondo", "cielo", "sky"))
-            {
-                layer = "Background"; order = 0;
-            }
+            if (ContieneCualquiera(nombre, "fondo", "background", "bg", "cielo", "sky"))
+                layer = "Background";
             else if (nombre.Contains("player") || nombre.Contains("jugador"))
-            {
-                layer = "Player"; order = 0;
-            }
+                layer = "Player";
             else if (ContieneCualquiera(nombre, "cristal", "crystal", "pincho", "spike", "enemy", "enemigo"))
-            {
-                layer = "Entities"; order = 0;
-            }
+                layer = "Entities";
             else
-            {
                 continue;
-            }
 
-            if (AplicarLayer(sr, layer, order))
-            {
-                cambios++;
-                Debug.Log($"[RenderLayerSetup] '{sr.gameObject.name}' → {layer}");
-            }
+            if (AsignarLayer(sr, layer)) cambios++;
             ResetZ(sr.transform);
         }
 
-        AssetDatabase.SaveAssets();
         EditorSceneManager.MarkSceneDirty(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene());
 
-        Debug.Log($"[RenderLayerSetup] TOTAL: {cambios} renderers actualizados. Guardá la escena (Ctrl+S).");
+        Debug.Log($"[RenderLayerSetup] {cambios} renderers actualizados. Guardá la escena (Ctrl+S).");
     }
 
-    static void LogLayersDisponibles()
+    static void EnsurarSortingLayers()
     {
-        var layers = SortingLayer.layers;
-        string lista = "";
-        foreach (var l in layers) lista += $"'{l.name}' ";
-        Debug.Log($"[RenderLayerSetup] Sorting Layers registradas: {lista}");
-    }
+        var tagManagerAsset = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0];
+        var so = new SerializedObject(tagManagerAsset);
+        var sortingLayersProp = so.FindProperty("m_SortingLayers");
 
-    // ── Helpers ───────────────────────────────────────────────────
+        bool modificado = false;
 
-    static bool AplicarLayer(Renderer r, string layerName, int order)
-    {
-        // Verificar que la layer existe
-        if (!SortingLayerExiste(layerName))
+        foreach (var nombre in LayersNecesarias)
         {
-            Debug.LogWarning($"[RenderLayerSetup] Layer '{layerName}' NO existe en el proyecto. Abrí Edit → Project Settings → Tags and Layers para verificar.");
-            return false;
+            bool existe = false;
+            for (int i = 0; i < sortingLayersProp.arraySize; i++)
+            {
+                if (sortingLayersProp.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative("name").stringValue == nombre)
+                {
+                    existe = true;
+                    break;
+                }
+            }
+
+            if (!existe)
+            {
+                sortingLayersProp.InsertArrayElementAtIndex(sortingLayersProp.arraySize);
+                var nuevo = sortingLayersProp.GetArrayElementAtIndex(sortingLayersProp.arraySize - 1);
+                nuevo.FindPropertyRelative("name").stringValue     = nombre;
+                nuevo.FindPropertyRelative("uniqueID").intValue    = Mathf.Abs(nombre.GetHashCode());
+                nuevo.FindPropertyRelative("locked").intValue      = 0;
+                modificado = true;
+                Debug.Log($"[RenderLayerSetup] Sorting Layer '{nombre}' creada.");
+            }
         }
 
-        if (r.sortingLayerName == layerName && r.sortingOrder == order) return false;
-
-        Undo.RecordObject(r, "Configurar Render Layer");
-        r.sortingLayerName = layerName;
-        r.sortingOrder     = order;
-        EditorUtility.SetDirty(r);
-        return true;
+        if (modificado)
+        {
+            so.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[RenderLayerSetup] Layers creadas. Si los renderers quedaron en Default, volvé a correr el menú.");
+        }
+        else
+        {
+            Debug.Log("[RenderLayerSetup] Todas las sorting layers ya existen.");
+        }
     }
 
-    static bool SortingLayerExiste(string nombre)
+    static bool AsignarLayer(Renderer r, string layerName)
     {
-        foreach (var l in SortingLayer.layers)
-            if (l.name == nombre) return true;
-        return false;
+        if (r.sortingLayerName == layerName) return false;
+        Undo.RecordObject(r, "Configurar Render Layer");
+        r.sortingLayerName = layerName;
+        r.sortingOrder     = 0;
+        EditorUtility.SetDirty(r);
+        return true;
     }
 
     static void ResetZ(Transform t)
