@@ -8,29 +8,34 @@ public class GameLoopManager : MonoBehaviour
     [HideInInspector] public static GameLoopManager Instance { get; private set; }
 
     [Header("Cristales")]
-    int cristalesObtenidos = 0;
-    [SerializeField] int cristalesTotales;
+    [SerializeField] private int cristalesObtenidos = 0;
+    [SerializeField] private int cristalesTotales;
 
     [Header("Muerte / Reinicio")]
-    [SerializeField] int   contadorMuertes = 0;
-    [SerializeField] float tiempoFadeOut   = 0.4f;
-    [SerializeField] float tiempoReinicio  = 1.5f;
+    [SerializeField] private int   contadorMuertes = 0;
+    [SerializeField] private float tiempoFadeOut   = 0.4f;
+    [SerializeField] private float tiempoReinicio  = 1.5f;
 
     [Header("Nivel")]
-    [SerializeField] int nivelActual;
-    [SerializeField] int totalNiveles;
+    [SerializeField] private int nivelActual;
+    [SerializeField] private int totalNiveles;
 
-    [Header("UI")]
+    [Header("UI — HUD")]
     [SerializeField] private CanvasGroup fadePanel;
     [SerializeField] private TMP_Text    txtCristales;
     [SerializeField] private TMP_Text    txtMuertes;
-    [SerializeField] private GameObject  panelFinNivel;
-    [SerializeField] private GameObject  panelPausa;
-    [SerializeField] private GameObject  panelVictoria;
+
+    [Header("UI — Paneles")]
+    [SerializeField] private GameObject panelFinNivel;
+    [SerializeField] private GameObject panelPausa;
+    [SerializeField] private GameObject panelOpciones;
+    [SerializeField] private GameObject panelVictoria;
 
     private float tiempoAcumulado;
     private int   cristalesAcumulados;
     private bool  isPaused;
+
+    // ── LIFECYCLE ─────────────────────────────────────────────────
 
     private void Awake()
     {
@@ -73,7 +78,13 @@ public class GameLoopManager : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Escape))
             TogglePause();
+
+        // R reinicia solo en juego (no en pausa ni en fin de nivel)
+        if (Input.GetKeyDown(KeyCode.R) && !isPaused)
+            Reintentar();
     }
+
+    // ── GAMEPLAY ──────────────────────────────────────────────────
 
     public void PlayerDied()
     {
@@ -95,21 +106,19 @@ public class GameLoopManager : MonoBehaviour
 
         ActualizarPanelFinNivel();
 
-        panelFinNivel.SetActive(true);
+        if (panelFinNivel != null) panelFinNivel.SetActive(true);
         Time.timeScale = 0f;
     }
 
     public void ContinuarSiguienteNivel()
     {
         Time.timeScale = 1f;
-        panelFinNivel.SetActive(false);
+        if (panelFinNivel != null) panelFinNivel.SetActive(false);
 
         int siguienteNivel = nivelActual + 1;
 
         if (siguienteNivel >= totalNiveles)
-        {
             MostrarVictoria();
-        }
         else
         {
             nivelActual        = siguienteNivel;
@@ -118,26 +127,76 @@ public class GameLoopManager : MonoBehaviour
         }
     }
 
-    public void TogglePause()
-    {
-        isPaused = !isPaused;
-
-        Time.timeScale = isPaused ? 0f : 1f;
-        panelPausa.SetActive(isPaused);
-    }
-
-    public void LeaveOut()
-    {
-        Application.Quit();
-    }
-
     public void MostrarVictoria()
     {
-        panelVictoria.SetActive(true);
+        if (panelVictoria != null) panelVictoria.SetActive(true);
         Time.timeScale = 0f;
-
         ActualizarPanelVictoria();
     }
+
+    // ── PAUSA ─────────────────────────────────────────────────────
+
+    public void TogglePause()
+    {
+        // No interrumpir el fin de nivel ni la victoria
+        if (panelFinNivel != null && panelFinNivel.activeSelf) return;
+        if (panelVictoria != null && panelVictoria.activeSelf) return;
+
+        isPaused       = !isPaused;
+        Time.timeScale = isPaused ? 0f : 1f;
+
+        if (panelPausa != null) panelPausa.SetActive(isPaused);
+
+        // Cerrar opciones al salir de pausa
+        if (!isPaused && panelOpciones != null)
+            panelOpciones.SetActive(false);
+    }
+
+    // Botón "Reanudar" del menú de pausa
+    public void Reanudar()
+    {
+        if (!isPaused) return;
+        TogglePause();
+    }
+
+    // Botón "Reintentar" — reinicia el nivel actual con fade
+    public void Reintentar()
+    {
+        CerrarPausaSilencioso();
+        StartCoroutine(RutinaReinicio());
+    }
+
+    // Botón "Opciones"
+    public void AbrirOpciones()
+    {
+        if (panelPausa    != null) panelPausa.SetActive(false);
+        if (panelOpciones != null) panelOpciones.SetActive(true);
+    }
+
+    // Botón "Atrás" dentro de opciones
+    public void CerrarOpciones()
+    {
+        if (panelOpciones != null) panelOpciones.SetActive(false);
+        if (panelPausa    != null && isPaused) panelPausa.SetActive(true);
+    }
+
+    // Botón "Menú Principal" — carga la escena índice 0
+    public void IrAlMenuPrincipal()
+    {
+        CerrarPausaSilencioso();
+        StartCoroutine(CargarEscenaConFade(0));
+    }
+
+    // Cierra la pausa sin animación (usada antes de cargar escena)
+    private void CerrarPausaSilencioso()
+    {
+        isPaused       = false;
+        Time.timeScale = 1f;
+        if (panelPausa    != null) panelPausa.SetActive(false);
+        if (panelOpciones != null) panelOpciones.SetActive(false);
+    }
+
+    // ── CORRUTINAS ────────────────────────────────────────────────
 
     private IEnumerator RutinaReinicio()
     {
@@ -181,6 +240,7 @@ public class GameLoopManager : MonoBehaviour
 
     private IEnumerator FadeOut(float duracion)
     {
+        if (fadePanel == null) yield break;
         fadePanel.gameObject.SetActive(true);
         float t = 0f;
         while (t < duracion)
@@ -194,6 +254,7 @@ public class GameLoopManager : MonoBehaviour
 
     private IEnumerator FadeIn()
     {
+        if (fadePanel == null) yield break;
         float t = 0f;
         while (t < tiempoFadeOut)
         {
@@ -207,18 +268,19 @@ public class GameLoopManager : MonoBehaviour
 
     private IEnumerator FadeInConEspera()
     {
+        if (fadePanel == null) yield break;
         fadePanel.gameObject.SetActive(true);
         fadePanel.alpha = 1f;
-
         yield return new WaitForSecondsRealtime(0.1f);
-
         yield return StartCoroutine(FadeIn());
     }
+
+    // ── HUD ───────────────────────────────────────────────────────
 
     private void ActualizarHUDCristales()
     {
         if (txtCristales != null)
-            txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
+            txtCristales.text = $"{cristalesObtenidos}<color=#4A3E30>/</color><color=#C8A040>{cristalesTotales}</color>";
     }
 
     private void ActualizarHUDMuertes()
@@ -229,15 +291,17 @@ public class GameLoopManager : MonoBehaviour
 
     private void ActualizarPanelFinNivel()
     {
+        if (panelFinNivel == null) return;
         var resumen = panelFinNivel.GetComponentInChildren<TextMeshProUGUI>();
         if (resumen != null)
-            resumen.text = $"Tiempo: {tiempoAcumulado:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}";
+            resumen.text = $"Tiempo: {Time.timeSinceLevelLoad:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}";
     }
 
     private void ActualizarPanelVictoria()
     {
+        if (panelVictoria == null) return;
         var resumen = panelVictoria.GetComponentInChildren<TextMeshProUGUI>();
         if (resumen != null)
-            resumen.text = $"¡Felicidades!\nTiempo total: {tiempoAcumulado:F2}s\nCristales totales: {cristalesAcumulados}";
+            resumen.text = $"Tiempo total: {tiempoAcumulado:F2}s\nCristales: {cristalesAcumulados}";
     }
 }

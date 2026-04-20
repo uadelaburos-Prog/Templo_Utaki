@@ -21,7 +21,7 @@ TagManager:
   - Collectible
   - BackGround
   - Hookable
-  -
+  - 
   - 
   - 
   - 
@@ -40,26 +40,32 @@ TagManager:
   - 
   - 
   m_SortingLayers:
-  - name: Background
-    uniqueID: 2457616283
-    locked: 0
-  - name: BackgroundDeco
-    uniqueID: 1123581321
-    locked: 0
   - name: Default
     uniqueID: 0
     locked: 0
-  - name: Tilemap
-    uniqueID: 1937401764
+  - name: Background
+    uniqueID: 1494718835
+    locked: 0
+  - name: BackgroundDeco
+    uniqueID: 2344068133
+    locked: 0
+  - name: TileMap
+    uniqueID: 1359597443
     locked: 0
   - name: Entities
-    uniqueID: 2569783812
+    uniqueID: 2309544607
     locked: 0
   - name: Player
-    uniqueID: 3607473059
+    uniqueID: 352877577
     locked: 0
   - name: Foreground
-    uniqueID: 4173522123
+    uniqueID: 1918835267
+    locked: 0
+  - name: Tilemap
+    uniqueID: 111247928
+    locked: 0
+  - name: UI
+    uniqueID: 280480693
     locked: 0
   m_RenderingLayers:
   - Default
