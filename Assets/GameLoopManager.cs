@@ -86,9 +86,6 @@ public class GameLoopManager : MonoBehaviour
     {
         cristalesObtenidos++;
         ActualizarHUDCristales();
-
-        if (cristalesObtenidos >= cristalesTotales)
-            NivelCompleto();
     }
 
     public void NivelCompleto()

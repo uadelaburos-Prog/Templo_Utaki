@@ -19,7 +19,7 @@ TagManager:
   - Hazard
   - Collectible
   - BackGround
-  - 
+  - Hook
   - 
   - 
   - 
@@ -42,11 +42,23 @@ TagManager:
   - name: Background
     uniqueID: 2457616283
     locked: 0
+  - name: BackgroundDeco
+    uniqueID: 1123581321
+    locked: 0
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Tilemap
+    uniqueID: 1937401764
+    locked: 0
+  - name: Entities
+    uniqueID: 2569783812
+    locked: 0
   - name: Player
     uniqueID: 3607473059
+    locked: 0
+  - name: Foreground
+    uniqueID: 4173522123
     locked: 0
   m_RenderingLayers:
   - Default
