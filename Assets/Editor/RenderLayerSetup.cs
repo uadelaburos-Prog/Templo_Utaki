@@ -11,26 +11,30 @@ public static class RenderLayerSetup
     [MenuItem("Templo Utaki/Configurar Render Layers")]
     static void Configurar()
     {
+        // Verificar que las sorting layers existen
+        LogLayersDisponibles();
+
         int cambios = 0;
 
         // ── Tilemaps ──────────────────────────────────────────────
-        foreach (var tr in Object.FindObjectsByType<TilemapRenderer>(FindObjectsSortMode.None))
+        var tilemapRenderers = Object.FindObjectsByType<TilemapRenderer>(FindObjectsSortMode.None);
+        Debug.Log($"[RenderLayerSetup] Tilemaps encontrados: {tilemapRenderers.Length}");
+
+        foreach (var tr in tilemapRenderers)
         {
             string nombre = tr.gameObject.name.ToLower();
             string layer;
             int    order;
 
-            if (ContieneCualquiera(nombre, "fondo mazmorra", "barfondo"))
+            Debug.Log($"[RenderLayerSetup] Procesando Tilemap: '{tr.gameObject.name}'");
+
+            if (ContieneCualquiera(nombre, "fondo", "back", "bg", "cielo", "sky", "barfondo"))
             {
                 layer = "Background"; order = 0;
             }
-            else if (ContieneCualquiera(nombre, "decorado") && !nombre.Contains("delante"))
+            else if (ContieneCualquiera(nombre, "deco", "decorado") && !nombre.Contains("delante"))
             {
                 layer = "BackgroundDeco"; order = 0;
-            }
-            else if (ContieneCualquiera(nombre, "suelo", "plataforma", "collision"))
-            {
-                layer = "Tilemap"; order = 0;
             }
             else if (ContieneCualquiera(nombre, "delante", "front", "foreground"))
             {
@@ -38,17 +42,25 @@ public static class RenderLayerSetup
             }
             else
             {
-                layer = "Default"; order = 0;
+                // Todo tilemap que no matchee → Tilemap (suelos, plataformas, collision, etc.)
+                layer = "Tilemap"; order = 0;
             }
 
-            if (AplicarLayer(tr, layer, order)) cambios++;
+            if (AplicarLayer(tr, layer, order))
+            {
+                cambios++;
+                Debug.Log($"[RenderLayerSetup] '{tr.gameObject.name}' → {layer}");
+            }
             ResetZ(tr.transform);
         }
 
         // ── SpriteRenderers ───────────────────────────────────────
-        foreach (var sr in Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
+        var spriteRenderers = Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None);
+        Debug.Log($"[RenderLayerSetup] SpriteRenderers encontrados: {spriteRenderers.Length}");
+
+        foreach (var sr in spriteRenderers)
         {
-            string nombre = tr_Nombre(sr);
+            string nombre = sr.gameObject.name.ToLower();
             string layer;
             int    order;
 
@@ -66,10 +78,14 @@ public static class RenderLayerSetup
             }
             else
             {
-                continue; // No tocar los que no matchean
+                continue;
             }
 
-            if (AplicarLayer(sr, layer, order)) cambios++;
+            if (AplicarLayer(sr, layer, order))
+            {
+                cambios++;
+                Debug.Log($"[RenderLayerSetup] '{sr.gameObject.name}' → {layer}");
+            }
             ResetZ(sr.transform);
         }
 
@@ -77,13 +93,28 @@ public static class RenderLayerSetup
         EditorSceneManager.MarkSceneDirty(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene());
 
-        Debug.Log($"[RenderLayerSetup] {cambios} renderers actualizados. Guardá la escena (Ctrl+S).");
+        Debug.Log($"[RenderLayerSetup] TOTAL: {cambios} renderers actualizados. Guardá la escena (Ctrl+S).");
+    }
+
+    static void LogLayersDisponibles()
+    {
+        var layers = SortingLayer.layers;
+        string lista = "";
+        foreach (var l in layers) lista += $"'{l.name}' ";
+        Debug.Log($"[RenderLayerSetup] Sorting Layers registradas: {lista}");
     }
 
     // ── Helpers ───────────────────────────────────────────────────
 
     static bool AplicarLayer(Renderer r, string layerName, int order)
     {
+        // Verificar que la layer existe
+        if (!SortingLayerExiste(layerName))
+        {
+            Debug.LogWarning($"[RenderLayerSetup] Layer '{layerName}' NO existe en el proyecto. Abrí Edit → Project Settings → Tags and Layers para verificar.");
+            return false;
+        }
+
         if (r.sortingLayerName == layerName && r.sortingOrder == order) return false;
 
         Undo.RecordObject(r, "Configurar Render Layer");
@@ -91,6 +122,13 @@ public static class RenderLayerSetup
         r.sortingOrder     = order;
         EditorUtility.SetDirty(r);
         return true;
+    }
+
+    static bool SortingLayerExiste(string nombre)
+    {
+        foreach (var l in SortingLayer.layers)
+            if (l.name == nombre) return true;
+        return false;
     }
 
     static void ResetZ(Transform t)
@@ -101,8 +139,6 @@ public static class RenderLayerSetup
         t.localPosition = new Vector3(p.x, p.y, 0f);
         EditorUtility.SetDirty(t);
     }
-
-    static string tr_Nombre(Component c) => c.gameObject.name.ToLower();
 
     static bool ContieneCualquiera(string s, params string[] palabras)
     {
