@@ -1,0 +1,97 @@
+====================================================
+  LEVELMANAGER — ESPECIFICACIÓN (GDD v3.0 §10, §13, §22.5.1)
+  Proyecto: Templo Utaki | Fecha: 2026-04-19
+====================================================
+
+------------------------------------------------------
+OBJETO EN ESCENA
+------------------------------------------------------
+- Nombre:       GameManager (vacío, no destruible entre escenas)
+- Componentes:  LevelManager.cs, AudioSource (música)
+- Patrón:       Singleton → LevelManager.Instance
+- DontDestroyOnLoad: SÍ (persiste entre niveles)
+
+------------------------------------------------------
+VARIABLES CLAVE
+------------------------------------------------------
+[Header("Cristales")]
+  int cristalesObtenidos
+  int cristalesTotales         ← se asigna en Inspector por nivel
+
+[Header("Muerte / Reinicio")]
+  int contadorMuertes
+  float tiempoFadeOut = 0.4f   ← fade-out < 0.5s (GDD)
+  float tiempoReinicio = 1.5f  ← reinicio total < 2s (GDD)
+
+[Header("Nivel")]
+  int nivelActual
+  int totalNiveles
+
+[Header("UI")]
+  CanvasGroup fadePanel        ← panel negro para fade-out
+  TMP_Text    txtCristales     ← HUD: "X / Y"
+  GameObject  panelFinNivel    ← pantalla breve fin de nivel
+  GameObject  panelPausa       ← menú pausa
+  GameObject  panelVictoria    ← créditos finales
+
+------------------------------------------------------
+MÉTODOS PÚBLICOS
+------------------------------------------------------
+PlayerDied()
+  → Incrementa contadorMuertes
+  → Coroutine: fade-out (tiempoFadeOut) → LoadScene actual → fade-in
+
+CrystalCollected()
+  → cristalesObtenidos++
+  → Actualiza txtCristales en HUD
+
+NivelCompleto()
+  → Guarda tiempo + cristales
+  → Muestra panelFinNivel con: cristales obtenidos/total, tiempo
+  → Botón "Continuar" carga siguiente escena
+
+TogglePause()
+  → Time.timeScale 0 ↔ 1
+  → Activa/desactiva panelPausa
+  → Silencia AudioSource de música (SFX sigue)
+
+MostrarVictoria()
+  → Se llama al completar el nivel final
+  → Muestra panelVictoria: puntuación total + contadorMuertes
+  → Time.timeScale = 0
+
+------------------------------------------------------
+INTERACCIONES CON OTROS SCRIPTS
+------------------------------------------------------
+VoidScript.cs       → llama LevelManager.Instance.PlayerDied()
+CrystalPickup.cs    → llama LevelManager.Instance.CrystalCollected()
+EndOfLevel.cs       → trigger OnTriggerEnter2D → LevelManager.Instance.NivelCompleto()
+PauseInput (Update) → detecta ESC → LevelManager.Instance.TogglePause()
+
+------------------------------------------------------
+ESTADOS DE JUEGO
+------------------------------------------------------
+En juego    → Time.timeScale=1, HUD activo
+Pausa       → Time.timeScale=0, panelPausa activo, música silenciada
+Muerte      → fade-out → reload escena (<2s total)
+Fin nivel   → panelFinNivel, espera input
+Victoria    → panelVictoria, Time.timeScale=0
+
+------------------------------------------------------
+LO QUE NO HACE (per GDD — no implementar)
+------------------------------------------------------
+✗ Sistema de vidas
+✗ Game over
+✗ Checkpoints
+✗ Guardar progreso entre sesiones
+✗ Diálogos / cutscenes
+✗ Rutas alternativas o secretos
+
+------------------------------------------------------
+PRIORIDAD PARA PARCIAL 1
+------------------------------------------------------
+1. PlayerDied() con fade-out + reinicio       ← CRÍTICO
+2. CrystalCollected() + HUD txtCristales      ← CRÍTICO
+3. NivelCompleto() + panelFinNivel            ← IMPORTANTE
+4. TogglePause() con ESC                      ← IMPORTANTE
+5. MostrarVictoria()                          ← NICE TO HAVE
