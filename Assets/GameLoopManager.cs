@@ -5,16 +5,16 @@ using UnityEngine.SceneManagement;
 
 public class GameLoopManager : MonoBehaviour
 {
-    public static GameLoopManager Instance { get; private set; }
+    [HideInInspector] public static GameLoopManager Instance { get; private set; }
 
     [Header("Cristales")]
     int cristalesObtenidos = 0;
     [SerializeField] int cristalesTotales;
 
     [Header("Muerte / Reinicio")]
-    [SerializeField] int contadorMuertes = 0;
-    [SerializeField] float tiempoFadeOut  = 0.4f;
-    [SerializeField] float tiempoReinicio = 1.5f;
+    [SerializeField] int   contadorMuertes = 0;
+    [SerializeField] float tiempoFadeOut   = 0.4f;
+    [SerializeField] float tiempoReinicio  = 1.5f;
 
     [Header("Nivel")]
     [SerializeField] int nivelActual;
@@ -22,10 +22,11 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private CanvasGroup fadePanel;
-    [SerializeField] private TMP_Text txtCristales;
-    [SerializeField] private GameObject panelFinNivel;
-    [SerializeField] private GameObject panelPausa;
-    [SerializeField] private GameObject panelVictoria;
+    [SerializeField] private TMP_Text    txtCristales;
+    [SerializeField] private TMP_Text    txtMuertes;
+    [SerializeField] private GameObject  panelFinNivel;
+    [SerializeField] private GameObject  panelPausa;
+    [SerializeField] private GameObject  panelVictoria;
 
     private float tiempoAcumulado;
     private int   cristalesAcumulados;
@@ -64,7 +65,8 @@ public class GameLoopManager : MonoBehaviour
         nivelActual  = SceneManager.GetActiveScene().buildIndex;
         totalNiveles = SceneManager.sceneCountInBuildSettings;
 
-        txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
+        ActualizarHUDCristales();
+        ActualizarHUDMuertes();
     }
 
     private void Update()
@@ -84,11 +86,14 @@ public class GameLoopManager : MonoBehaviour
     {
         cristalesObtenidos++;
         ActualizarHUDCristales();
+
+        if (cristalesObtenidos >= cristalesTotales)
+            NivelCompleto();
     }
 
     public void NivelCompleto()
     {
-        tiempoAcumulado    += Time.timeSinceLevelLoad;
+        tiempoAcumulado     += Time.timeSinceLevelLoad;
         cristalesAcumulados += cristalesObtenidos;
 
         ActualizarPanelFinNivel();
@@ -215,11 +220,14 @@ public class GameLoopManager : MonoBehaviour
 
     private void ActualizarHUDCristales()
     {
-        txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
+        if (txtCristales != null)
+            txtCristales.text = $"{cristalesObtenidos} / {cristalesTotales}";
     }
 
     private void ActualizarHUDMuertes()
     {
+        if (txtMuertes != null)
+            txtMuertes.text = $"Muertes: {contadorMuertes}";
     }
 
     private void ActualizarPanelFinNivel()
