@@ -26,3 +26,7 @@ Thumbs.db
 # Archivos de debug de Unity
 sysinfo.txt
 *.stackdump
+
+# Archivos Claude locales (nunca versionar)
+CLAUDE.md
+SESION.md

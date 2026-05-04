@@ -17,6 +17,9 @@ public class PatrollerAI : MonoBehaviour
     [Tooltip("Radio al que el jugador debe alejarse para que el enemigo abandone la persecución.")]
     [SerializeField] private float radioAbandonar        = 7f;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip sfxAlerta;
+
     private enum Estado { Patrulla, Persecucion, Regreso }
     private Estado estado = Estado.Patrulla;
 
@@ -50,7 +53,10 @@ public class PatrollerAI : MonoBehaviour
             case Estado.Patrulla:
                 Patrullar();
                 if (dist <= radioDeteccion)
+                {
+                    AudioManager.instance?.FxSoundEffect(sfxAlerta, transform, 1f);
                     estado = Estado.Persecucion;
+                }
                 break;
 
             case Estado.Persecucion:
@@ -62,7 +68,10 @@ public class PatrollerAI : MonoBehaviour
             case Estado.Regreso:
                 Regresar();
                 if (dist <= radioDeteccion)
+                {
+                    AudioManager.instance?.FxSoundEffect(sfxAlerta, transform, 1f);
                     estado = Estado.Persecucion;
+                }
                 break;
         }
     }

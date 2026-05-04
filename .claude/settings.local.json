@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Casto\\\\Desktop\\\\Templo_Utaki\\\\Assets\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(xargs ls *)",
+      "Bash(xargs '-I{}' sh -c 'python3 -c \" *)",
+      "Bash(python3 *)",
+      "Bash(git pull *)",
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(git checkout *)",
+      "Bash(grep -v \"\\\\.meta$\")",
+      "Bash(Get-Item \"Assets/Music&SFX/Wooshh.mp3\")",
+      "Bash(Select-Object Name, Length, LastWriteTime)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api *)"
+    ]
+  }
+}

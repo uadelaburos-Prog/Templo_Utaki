@@ -13,6 +13,9 @@ public class CrystalPickup : MonoBehaviour
     [SerializeField] private float     pickupRadius = 0.6f;
     [SerializeField] private LayerMask playerMask;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip sfxCristal;
+
     private Vector3 startPos;
     private float   floatOffset;
 
@@ -29,6 +32,7 @@ public class CrystalPickup : MonoBehaviour
 
         if (Physics2D.OverlapCircle(transform.position, pickupRadius, playerMask))
         {
+            AudioManager.instance?.FxSoundEffect(sfxCristal, transform, 1f);
             GameLoopManager.Instance.CollectCrystal();
             gameObject.SetActive(false);
         }
