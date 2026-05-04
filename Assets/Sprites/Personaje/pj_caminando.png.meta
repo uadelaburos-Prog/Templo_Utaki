@@ -1,19 +1,22 @@
 fileFormatVersion: 2
-guid: 38221bbcc93c15b46968edb074b2db5c
+guid: 69d556f6ea7741d4a84f50ca5e1716f8
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 8340064455531129220
-    second: player run _0
+      213: -3488609840607792469
+    second: pj_caminando_0
   - first:
-      213: -4932262579492527385
-    second: player run _1
+      213: 3224728929587709161
+    second: pj_caminando_1
   - first:
-      213: -3730849904568040581
-    second: player run _2
+      213: -3147768337973666882
+    second: pj_caminando_2
   - first:
-      213: -7810359702986844540
-    second: player run _3
+      213: 8106117338076172278
+    second: pj_caminando_3
+  - first:
+      213: -2827888437257770563
+    second: pj_caminando_4
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -60,7 +63,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 5
+  spritePixelsToUnits: 8
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -109,79 +112,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: player run _0
+      name: pj_caminando_0
       rect:
         serializedVersion: 2
-        x: 4
-        y: 16
-        width: 8
-        height: 16
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 4896bcb4f6cddb370800000000000000
-      internalID: 8340064455531129220
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: player run _1
-      rect:
-        serializedVersion: 2
-        x: 20
-        y: 16
-        width: 8
-        height: 16
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 7e26562f0551d8bb0800000000000000
-      internalID: -4932262579492527385
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: player run _2
-      rect:
-        serializedVersion: 2
-        x: 36
-        y: 16
-        width: 8
-        height: 16
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: b730ce757cb593cc0800000000000000
-      internalID: -3730849904568040581
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: player run _3
-      rect:
-        serializedVersion: 2
-        x: 4
+        x: 1
         y: 0
-        width: 8
-        height: 16
+        width: 7
+        height: 11
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -190,52 +127,96 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 486917f2b370c9390800000000000000
-      internalID: -7810359702986844540
+      spriteID: ba2f3aa55d7f59fc0800000000000000
+      internalID: -3488609840607792469
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: player run _4
+      name: pj_caminando_1
       rect:
         serializedVersion: 2
-        x: 20
+        x: 9
         y: 0
-        width: 8
-        height: 16
+        width: 7
+        height: 11
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
-      tessellationDetail: 0
+      tessellationDetail: -1
       bones: []
-      spriteID: 8388a8f765e5d874d9a0d28762c69f69
-      internalID: 1531063049
+      spriteID: 9e4400940e980cc20800000000000000
+      internalID: 3224728929587709161
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: player run _5
+      name: pj_caminando_2
       rect:
         serializedVersion: 2
-        x: 36
+        x: 17
         y: 0
-        width: 8
-        height: 16
+        width: 7
+        height: 11
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
-      tessellationDetail: 0
+      tessellationDetail: -1
       bones: []
-      spriteID: 874ca6934ccea894c8da9ea47c4d5060
-      internalID: 1124583143
+      spriteID: ebb9bdbcf51e054d0800000000000000
+      internalID: -3147768337973666882
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: pj_caminando_3
+      rect:
+        serializedVersion: 2
+        x: 25
+        y: 0
+        width: 7
+        height: 11
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6ff4aab55c6be7070800000000000000
+      internalID: 8106117338076172278
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: pj_caminando_4
+      rect:
+        serializedVersion: 2
+        x: 33
+        y: 0
+        width: 7
+        height: 11
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: db9e0d8f27251c8d0800000000000000
+      internalID: -2827888437257770563
       vertices: []
       indices: 
       edges: []
@@ -244,7 +225,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 11d158bdc96e78d4996f1d5ef954e25e
+    spriteID: 76a89f4cfb4ad5b418ff02105bd4f125
     internalID: 0
     vertices: []
     indices: 
@@ -254,12 +235,11 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      player run _0: 8340064455531129220
-      player run _1: -4932262579492527385
-      player run _2: -3730849904568040581
-      player run _3: -7810359702986844540
-      player run _4: 1531063049
-      player run _5: 1124583143
+      pj_caminando_0: -3488609840607792469
+      pj_caminando_1: 3224728929587709161
+      pj_caminando_2: -3147768337973666882
+      pj_caminando_3: 8106117338076172278
+      pj_caminando_4: -2827888437257770563
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

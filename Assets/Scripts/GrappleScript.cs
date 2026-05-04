@@ -23,11 +23,12 @@ public class GrappleScript : MonoBehaviour
     [SerializeField] private float     grabForce = 15f;
 
     [Header("Vuelo")]
-    [SerializeField] private float launchSpeed   = 20f;
-    [SerializeField] private float retractSpeed  = 25f;
-    [SerializeField] private float hookGravity   = 18f;
-    [SerializeField] private float maxFlightTime = 0.6f;
-    [SerializeField] private float failCooldown  = 0.3f;
+    [SerializeField] private float launchSpeed       = 20f;
+    [SerializeField] private float retractSpeed      = 25f;
+    [SerializeField] private float failRetractSpeed  = 8f;
+    [SerializeField] private float hookGravity       = 18f;
+    [SerializeField] private float maxFlightTime     = 0.6f;
+    [SerializeField] private float failCooldown      = 0.3f;
 
     [Header("Carga")]
     [SerializeField] private float      minGrappleDistance = 3f;
@@ -36,7 +37,7 @@ public class GrappleScript : MonoBehaviour
     [SerializeField] private Image      chargeBarImage;
 
     [Header("Swing")]
-    [SerializeField] private float snapRadius    = 1.5f;
+    [SerializeField] private float snapRadius    = 0.4f;
     [SerializeField] private float swingDamping  = 0.02f;
     [SerializeField] private float climbSpeed    = 6f;
     [SerializeField] private float minRopeLength = 1f;
@@ -82,6 +83,9 @@ public class GrappleScript : MonoBehaviour
     private float      cooldownTimer;
     private float      chargeTimer;
     private float      currentRopeLength;
+    private float      launchMaxDistance;   // distancia real según carga
+    private bool       retractFailed;       // true = fallo, false = soltó el botón
+    private bool       hookGrounded;        // el hook tocó el suelo durante la retracción
     private GameObject currentHook;
     private Sprite     hookFallbackSprite;
 
@@ -225,10 +229,11 @@ public class GrappleScript : MonoBehaviour
         float   dist      = Mathf.Lerp(minGrappleDistance, maxGrappleDistance, chargePercent);
         Vector2 direction = (mouse - origin).normalized;
 
-        grapplePoint   = origin + direction * dist;
-        hookCurrentPos = origin;
-        hookVelocity   = direction * launchSpeed;
-        flightTimer    = 0f;
+        grapplePoint      = origin + direction * dist;
+        hookCurrentPos    = origin;
+        hookVelocity      = direction * launchSpeed;
+        flightTimer       = 0f;
+        launchMaxDistance = dist;
 
         SpawnHookGO(origin);
 
@@ -264,7 +269,7 @@ public class GrappleScript : MonoBehaviour
 
             if      (esGrappleable) { SnapAndAttach(hit.point); return; }
             else if (esHookable)    { AttachPull(hit.collider, hit.point); return; }
-            else                    { cooldownTimer = failCooldown; GrappleRetract(); return; }
+            else                    { cooldownTimer = failCooldown; GrappleRetract(failed: true); return; }
         }
 
         // Snap assist solo para superficies de columpio
@@ -272,10 +277,10 @@ public class GrappleScript : MonoBehaviour
         if (snap != null) { SnapAndAttach(snap.ClosestPoint(hookCurrentPos)); return; }
 
         if (flightTimer >= maxFlightTime ||
-            Vector2.Distance(hookCurrentPos, transform.position) > maxGrappleDistance)
+            Vector2.Distance(hookCurrentPos, transform.position) > launchMaxDistance)
         {
             cooldownTimer = failCooldown;
-            GrappleRetract();
+            GrappleRetract(failed: true);
         }
     }
 
@@ -364,11 +369,14 @@ public class GrappleScript : MonoBehaviour
 
     // ── Retracción ────────────────────────────────────────────────
 
-    public void GrappleRetract()
+    public void GrappleRetract(bool failed = false)
     {
         joint.enabled    = false;
         isGrappling      = false;
         rb.linearDamping = 0f;
+        retractFailed    = failed;
+        hookVelocity     = Vector2.zero;
+        hookGrounded     = false;
         ClearPullState();
         state = GrappleState.Retracting;
 
@@ -379,17 +387,36 @@ public class GrappleScript : MonoBehaviour
 
     private void UpdateRetracting()
     {
-        hookCurrentPos = Vector2.MoveTowards(hookCurrentPos, transform.position, retractSpeed * Time.deltaTime);
+        float speed = retractFailed ? failRetractSpeed : retractSpeed;
+
+        // Detectar contacto con el suelo
+        if (!hookGrounded && Physics2D.OverlapCircle(hookCurrentPos, 0.1f, obstacleMask))
+            hookGrounded = true;
+
+        if (hookGrounded)
+        {
+            // Tocó el piso: retracción directa sin gravedad
+            hookCurrentPos = Vector2.MoveTowards(hookCurrentPos, transform.position, retractSpeed * Time.deltaTime);
+        }
+        else
+        {
+            // En el aire: gravedad continúa afectando el hook
+            hookVelocity   += Vector2.down * hookGravity * Time.deltaTime;
+            Vector2 toPlayer = ((Vector2)transform.position - hookCurrentPos).normalized;
+            hookCurrentPos  += (toPlayer * speed + hookVelocity) * Time.deltaTime;
+        }
+
         DrawRope(hookCurrentPos);
 
-        if (Vector2.Distance(hookCurrentPos, transform.position) < 0.05f)
+        if (Vector2.Distance(hookCurrentPos, transform.position) < 0.2f)
         {
             if (currentHook != null) { Destroy(currentHook); currentHook = null; }
             line.enabled       = false;
             line.positionCount = 2;
             line.SetPosition(0, Vector2.zero);
             line.SetPosition(1, Vector2.zero);
-            state = GrappleState.Idle;
+            hookVelocity       = Vector2.zero;
+            state              = GrappleState.Idle;
         }
     }
 

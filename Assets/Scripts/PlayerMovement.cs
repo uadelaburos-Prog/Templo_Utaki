@@ -6,89 +6,57 @@ public class PlayerMovement : MonoBehaviour
 {
     private Rigidbody2D rb;
 
-    [Header("Movimiento — Suelo")]
-    [Tooltip("Velocidad horizontal máxima en suelo (u/s).")]
-    [SerializeField] private float moveSpeed   = 12f;
-    [Tooltip("Aceleración horizontal al moverse en la dirección deseada en suelo (u/s²).")]
-    [SerializeField] private float groundAccel = 140f;
-    [Tooltip("Desaceleración al cambiar dirección o soltar la tecla en suelo (u/s²).")]
-    [SerializeField] private float groundDecel = 55f;
-
-    [Header("Movimiento — Aire")]
-    [Tooltip("Aceleración horizontal en aire libre. Valor bajo para preservar el momentum del swing (u/s²).")]
-    [SerializeField] private float freeAirAccel      = 4f;
-    [Tooltip("Fuerza tangencial aplicada al arco del péndulo al presionar A/D mientras cuelga del gancho (N).")]
-    [SerializeField] private float swingForce        = 15f;
-    [Tooltip("Escala de gravedad mientras el jugador está enganchado. Controla la velocidad del péndulo. Physics2D Gravity Y = -30.")]
-    [SerializeField] private float swingGravityScale = 2.5f;
-
-    [Header("Gravedad — Physics2D Gravity Y = -30")]
-    [Tooltip("Multiplicador de gravedad en caída libre y salto. Gravedad efectiva = gravityScale × Physics2D.gravity.y.")]
-    [SerializeField] private float gravityScale      = 3.5f;
-    [Tooltip("Velocidad vertical máxima de caída (u/s, valor negativo). Limita la velocidad terminal.")]
-    [SerializeField] private float maxFallSpeed      = -20f;
-    [Tooltip("Si la velocidad vertical es menor a este valor y se sostiene Espacio, la gravedad se reduce a la mitad (efecto apex float).")]
-    [SerializeField] private float halfGravThreshold = 5f;
+    [Header("Movimiento")]
+    [Tooltip("Velocidad horizontal máxima (u/s). GDD §4.1: 8–10.")]
+    [SerializeField] private float moveSpeed = 9f;
+    [Tooltip("Aceleración horizontal en el aire al presionar una dirección (u/s²).")]
+    [SerializeField] private float airAccel  = 35f;
+    [Tooltip("Desaceleración en aire sin input — permite caer sobre el mismo tile (u/s²).")]
+    [SerializeField] private float airDecel  = 20f;
 
     [Header("Salto")]
-    [Tooltip("Velocidad vertical inicial al saltar (u/s). GDD §4.1.")]
-    [SerializeField] private float jumpForce    = 12f;
-    [Tooltip("Velocidad vertical mínima sostenida mientras se mantiene Espacio durante el salto variable.")]
-    [SerializeField] private float varJumpSpeed = 11f;
-    [Tooltip("Duración máxima del salto variable sosteniendo Espacio (segundos).")]
-    [SerializeField] private float varJumpTime  = 0.2f;
-    [Tooltip("Multiplicador de velocidad vertical al soltar Espacio antes del apex. 0 = corte total, 1 = sin corte.")]
-    [SerializeField, Range(0f, 1f)] private float jumpCutMult = 0.25f;
-    [Tooltip("Ventana de tiempo tras salir de un borde en la que aún se puede saltar (segundos).")]
-    [SerializeField] private float coyoteTime     = 0.12f;
-    [Tooltip("El input de salto se recuerda durante este tiempo. Si el jugador aterriza en la ventana, el salto se ejecuta automáticamente (segundos).")]
-    [SerializeField] private float jumpBufferTime  = 0.15f;
+    [Tooltip("Velocidad vertical inicial al saltar (u/s). GDD §4.1: 12.")]
+    [SerializeField] private float jumpForce   = 12f;
+    [Tooltip("Multiplicador al soltar espacio antes del apex. GDD §4.1: 0.5.")]
+    [SerializeField, Range(0f, 1f)] private float jumpCutMult = 0.5f;
+    [Tooltip("Ventana post-borde donde aún se puede saltar (s). GDD §4.1: 0.12.")]
+    [SerializeField] private float coyoteTime  = 0.12f;
 
-    [Header("Momentum Jump")]
-    [Tooltip("Boost de velocidad horizontal adicional al saltar a alta velocidad en la misma dirección (u/s).")]
-    [SerializeField] private float jumpHBoost          = 4f;
-    [Tooltip("Fracción de moveSpeed necesaria para activar el boost horizontal. 0.8 = requiere estar al 80% de la velocidad máxima.")]
-    [SerializeField] private float jumpHBoostThreshold = 0.8f;
+    [Header("Gravedad — Physics2D.gravity.y = −30")]
+    [Tooltip("Escala de gravedad mientras el jugador sube (espacio sostenido). Menor = apex más flotante.")]
+    [SerializeField] private float riseGravityScale = 2.0f;
+    [Tooltip("Escala de gravedad en caída libre. GDD §4.1 fallGravity ≈ 5.5 → usa ~3.5 con gravity −30.")]
+    [SerializeField] private float fallGravityScale = 3.5f;
+    [Tooltip("Velocidad vertical máxima de caída (u/s, negativo). GDD §4.1: −20.")]
+    [SerializeField] private float maxFallSpeed     = -20f;
 
-    [Header("Swing Jump")]
-    [Tooltip("Ventana de tiempo tras soltar el gancho en la que el salto recibe boost de altura (segundos).")]
-    [SerializeField] private float swingJumpWindow    = 0.2f;
-    [Tooltip("Multiplicador de jumpForce al saltar dentro de la ventana swing jump. 1.3 = +30% de altura.")]
-    [SerializeField] private float swingJumpBoostMult = 1.3f;
-
-    [Header("Control en Aire")]
-    [Tooltip("Ventana de tiempo tras saltar en la que se aplica control horizontal activo (segundos).")]
-    [SerializeField] private float airControlTime  = 0.5f;
-    [Tooltip("Aceleración horizontal durante la ventana de control en aire (u/s²). Fuera de la ventana se usa freeAirAccel.")]
-    [SerializeField] private float airControlAccel = 60f;
+    [Header("Gancho")]
+    [Tooltip("Fuerza tangencial aplicada al arco del péndulo con A/D (N).")]
+    [SerializeField] private float swingForce        = 15f;
+    [Tooltip("Escala de gravedad mientras el jugador está enganchado.")]
+    [SerializeField] private float swingGravityScale = 2.5f;
 
     [Header("Suelo")]
-    private bool isGrounded;
-    public bool IsGrounded => isGrounded;
-    [Tooltip("Layer mask de las superficies que se consideran suelo para la detección de isGrounded.")]
     [SerializeField] private LayerMask mask;
-    [Tooltip("Transform hijo del jugador desde el que se lanza el OverlapBox de detección de suelo.")]
     [SerializeField] private Transform groundCheck;
-    [Tooltip("Ancho del OverlapBox de detección de suelo. Debe coincidir con el ancho del CapsuleCollider2D del player (GDD §4.1: 0.5u). Reducir levemente evita falsos positivos en paredes.")]
-    [SerializeField] private float groundCheckWidth = 0.45f;
-    [Tooltip("Alto del OverlapBox de detección de suelo. Valor pequeño detecta solo contacto inmediato con el suelo.")]
+    [SerializeField] private float groundCheckWidth  = 0.45f;
     [SerializeField] private float groundCheckHeight = 0.05f;
 
+    private bool isGrounded;
+    public  bool IsGrounded => isGrounded;
+
     private GrappleScript grapple;
-    public bool isHanging => grapple.isGrappling;
+    public  bool isHanging => grapple.isGrappling;
 
-    private Animator        anim;
-    private SpriteRenderer  sr;
+    private Animator       anim;
+    private SpriteRenderer sr;
 
-    private float inputX          = 0f;
-    private bool  jumpHeld        = false;
-    private float coyoteTimer     = 0f;
-    private float jumpBufferTimer = 0f;
-    private float varJumpTimer    = 0f;
-    private bool  varJumpActive   = false;
-    private bool  wasHanging      = false;
-    private float swingJumpTimer  = 0f;
-    private float airControlTimer = 0f;
+    private float inputX      = 0f;
+    private bool  jumpHeld    = false;
+    private float coyoteTimer = 0f;
+    private bool  jumpQueued  = false;   // se mantiene hasta aterrizar, sin expirar
+    private bool  jumpCutDone = false;
+    private bool  wasHanging  = false;
 
     void Start()
     {
@@ -101,94 +69,70 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         inputX = 0f;
-        if (Input.GetKey(KeyCode.D))      inputX =  1f;
+        if      (Input.GetKey(KeyCode.D)) inputX =  1f;
         else if (Input.GetKey(KeyCode.A)) inputX = -1f;
 
         jumpHeld = Input.GetKey(KeyCode.Space);
 
-        anim.SetBool("IsRunning", isGrounded && inputX != 0f);
+        if (inputX != 0f) sr.flipX = inputX < 0f;
 
-        if (inputX != 0f)
-            sr.flipX = inputX < 0f;
+        // Saltar mientras se cuelga corta la soga en el mismo frame
+        if (Input.GetKeyDown(KeyCode.Space) && isHanging)
+            grapple.GrappleRetract();
 
-        // --- DETECCIÓN DE SOLTAR GANCHO → abre ventana swing jump ---
+        // Coyote time — se activa también al soltar el gancho
         bool hangingNow = isHanging;
         if (wasHanging && !hangingNow)
-            swingJumpTimer = swingJumpWindow;
+        {
+            coyoteTimer  = coyoteTime;
+            jumpCutDone  = false;
+            if (jumpHeld) jumpQueued = true; // space ya apretado al soltar → anota el salto
+        }
         wasHanging = hangingNow;
 
-        if (swingJumpTimer > 0f)
-            swingJumpTimer -= Time.deltaTime;
+        if (isGrounded)       coyoteTimer = coyoteTime;
+        else if (!hangingNow) coyoteTimer -= Time.deltaTime;
 
-        if (airControlTimer > 0f)
-            airControlTimer -= Time.deltaTime;
+        // Marcar salto — el intent se conserva hasta aterrizar, sin expirar
+        if (Input.GetKeyDown(KeyCode.Space)) jumpQueued = true;
 
-        // --- COYOTE TIME ---
-        if (isGrounded)
-            coyoteTimer = coyoteTime;
-        else
-            coyoteTimer -= Time.deltaTime;
-
-        // --- INPUT BUFFERING ---
-        if (Input.GetKeyDown(KeyCode.Space))
-            jumpBufferTimer = jumpBufferTime;
-        if (jumpBufferTimer > 0f)
-            jumpBufferTimer -= Time.deltaTime;
-
-        // --- SALTO ---
-        // canJump: suelo, coyote, o dentro de ventana swing jump
-        bool canJump    = isGrounded || coyoteTimer > 0f || swingJumpTimer > 0f;
-        bool isSwingJump = swingJumpTimer > 0f && !isGrounded && coyoteTimer <= 0f;
-
-        if (jumpBufferTimer > 0f && canJump)
+        // Ejecutar salto
+        bool canJump = !hangingNow && (isGrounded || coyoteTimer > 0f);
+        if (jumpQueued && canJump)
         {
-            float vy = isSwingJump ? jumpForce * swingJumpBoostMult : jumpForce;
-
-            float hBoost = 0f;
-            bool atSpeed = Mathf.Abs(rb.linearVelocity.x) >= moveSpeed * jumpHBoostThreshold;
-            bool sameDir = inputX != 0 && Mathf.Sign(rb.linearVelocity.x) == Mathf.Sign(inputX);
-            if (atSpeed && sameDir)
-                hBoost = inputX * jumpHBoost;
-
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x + hBoost, vy);
-            varJumpTimer   = varJumpTime;
-            varJumpActive  = true;
-            jumpBufferTimer = 0f;
-            coyoteTimer     = 0f;
-            swingJumpTimer  = 0f;
-            airControlTimer = airControlTime;
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            jumpQueued  = false;
+            coyoteTimer = 0f;
+            jumpCutDone = false;
         }
 
-        // --- SALTO VARIABLE (VarJump) ---
-        if (varJumpActive && varJumpTimer > 0f)
+        // Jump cut: soltar espacio antes del apex recorta la velocidad vertical
+        if (!jumpHeld && rb.linearVelocity.y > 0f && !jumpCutDone)
         {
-            if (jumpHeld && rb.linearVelocity.y > 0f)
-            {
-                if (rb.linearVelocity.y < varJumpSpeed)
-                    rb.linearVelocity = new Vector2(rb.linearVelocity.x, varJumpSpeed);
-
-                varJumpTimer -= Time.deltaTime;
-                if (varJumpTimer <= 0f)
-                    varJumpActive = false;
-            }
-            else if (!jumpHeld)
-            {
-                if (rb.linearVelocity.y > 0f)
-                    rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
-                varJumpTimer  = 0f;
-                varJumpActive = false;
-            }
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMult);
+            jumpCutDone = true;
         }
+
+        if (isGrounded) jumpCutDone = false;
+
+        // Parámetros del Animator — después de que hangingNow está definido
+        anim.SetBool("IsRunning",  isGrounded && inputX != 0f);
+        anim.SetBool("IsGrounded", isGrounded);
+        anim.SetBool("IsHanging",  hangingNow);
+        anim.SetFloat("VelocityY", rb.linearVelocity.y);
     }
 
     void FixedUpdate()
     {
-        isGrounded = Physics2D.OverlapBox(groundCheck.position, new Vector2(groundCheckWidth, groundCheckHeight), 0f, mask);
+        isGrounded = Physics2D.OverlapBox(
+            groundCheck.position,
+            new Vector2(groundCheckWidth, groundCheckHeight),
+            0f, mask);
 
-        // --- MOVIMIENTO HORIZONTAL ---
+        // Movimiento horizontal
         if (isHanging)
         {
-            // Fuerza tangencial al arco — elimina equilibrio diagonal
+            // Fuerza tangencial al péndulo
             Vector2 anchorPos = grapple.joint.connectedAnchor;
             Vector2 ropeDir   = ((Vector2)transform.position - anchorPos).normalized;
             Vector2 tangente  = new Vector2(-ropeDir.y, ropeDir.x);
@@ -196,56 +140,42 @@ public class PlayerMovement : MonoBehaviour
         }
         else if (isGrounded)
         {
-            // Recortar momentum del swing al aterrizar
+            // Suelo: velocidad directa, sin inercia
             if (Mathf.Abs(rb.linearVelocity.x) > moveSpeed)
                 rb.linearVelocity = new Vector2(Mathf.Sign(rb.linearVelocity.x) * moveSpeed, rb.linearVelocity.y);
 
-            if (inputX == 0f)
-            {
-                rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
-            }
-            else
-            {
-                float targetX = inputX * moveSpeed;
-                bool  sameDir = Mathf.Sign(inputX) == Mathf.Sign(rb.linearVelocity.x);
-                float accel   = sameDir ? groundAccel : groundDecel;
-                rb.linearVelocity = new Vector2(
-                    Mathf.MoveTowards(rb.linearVelocity.x, targetX, accel * Time.fixedDeltaTime),
-                    rb.linearVelocity.y
-                );
-            }
+            rb.linearVelocity = new Vector2(inputX * moveSpeed, rb.linearVelocity.y);
         }
         else
         {
-            float targetX     = inputX * moveSpeed;
-            float usedAirAccel = airControlTimer > 0f ? airControlAccel : freeAirAccel;
+            // Aire: accel al presionar, decel sin input
+            float target = inputX * moveSpeed;
+            float accel  = inputX == 0f ? airDecel : airAccel;
 
-            bool tieneMomentum = inputX != 0
+            // Conservar momentum del swing si supera moveSpeed en la misma dirección
+            bool tieneMomentum = inputX != 0f
                 && Mathf.Sign(rb.linearVelocity.x) == Mathf.Sign(inputX)
                 && Mathf.Abs(rb.linearVelocity.x) > moveSpeed;
 
             if (!tieneMomentum)
                 rb.linearVelocity = new Vector2(
-                    Mathf.MoveTowards(rb.linearVelocity.x, targetX, usedAirAccel * Time.fixedDeltaTime),
-                    rb.linearVelocity.y
-                );
+                    Mathf.MoveTowards(rb.linearVelocity.x, target, accel * Time.fixedDeltaTime),
+                    rb.linearVelocity.y);
         }
 
-        // --- GRAVEDAD (uniforme, apex float al mantener salto) ---
-        if (!isHanging && !isGrounded)
+        // Gravedad
+        if (isHanging)
         {
-            float gScale = gravityScale;
-            if (Mathf.Abs(rb.linearVelocity.y) < halfGravThreshold && jumpHeld)
-                gScale *= 0.5f;
-
-            rb.gravityScale = gScale;
+            rb.gravityScale = swingGravityScale;
+        }
+        else if (!isGrounded)
+        {
+            rb.gravityScale = (rb.linearVelocity.y > 0f && jumpHeld)
+                ? riseGravityScale
+                : fallGravityScale;
 
             if (rb.linearVelocity.y < maxFallSpeed)
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
-        }
-        else if (isHanging)
-        {
-            rb.gravityScale = swingGravityScale;
         }
         else
         {
