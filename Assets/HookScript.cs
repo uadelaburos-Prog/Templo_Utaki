@@ -1,142 +1,153 @@
 using UnityEngine;
 
-// Gancho secundario: jala objetos del mundo (plataformas de tracción, paredes reactivas).
-// NO mueve al jugador — eso es trabajo del GrappleScript.
-// Requisitos del objeto hookeable: Tag "Hookable" + layer asignado en hookMask.
-// Asignar el LineRenderer propio en el Inspector (no compartir con GrappleScript).
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(LineRenderer))]
 public class HookScript : MonoBehaviour
 {
-    [Header("Detección")]
-    [SerializeField] private float    grabDistance = 10f;
-    [SerializeField] private float    grabForce    = 15f;
+    [SerializeField] private float grabDistance = 10f;
+    [SerializeField] private float grabForce = 15f;
     [SerializeField] private LayerMask hookMask;
 
-    [Header("Hook Visual")]
+    [Header("Hook Prefab")]
     [SerializeField] private GameObject hookPrefab;
-    [SerializeField] private float      hookScale = 1f;
+    [SerializeField] private float hookScale = 1f;
 
     [Header("Vuelo del Hook")]
-    [SerializeField] private float launchSpeed   = 20f;
-    [SerializeField] private float hookGravity   = 18f;
+    [SerializeField] private float launchSpeed = 20f;
+    [SerializeField] private float hookGravity = 18f;
     [SerializeField] private float maxFlightTime = 0.6f;
 
-    [Header("Cuerda")]
-    [SerializeField] private LineRenderer line;
-    [SerializeField] private int          segments           = 20;
+    [Header("Animación de la Cuerda")]
+    [SerializeField] private int segments = 20;
     [Range(0, 20)]
-    [SerializeField] private float        straightenSpeed    = 5f;
-    [Range(0.01f, 4)]
-    [SerializeField] private float        startWaveSize      = 2f;
-    [SerializeField] private Color        ropeColor          = new Color(0.55f, 0.27f, 0.07f);
-    [SerializeField] private float        ropeWidth          = 0.15f;
+    [SerializeField] private float straightenLineSpeed = 5f;
     public AnimationCurve ropeAnimationCurve;
+    [Range(0.01f, 4)]
+    [SerializeField] private float startWaveSize = 2f;
+    private float waveSize = 0f;
+
+    [Header("Progresión de la Cuerda")]
     public AnimationCurve ropeProgressionCurve;
 
-    private enum HookState { Idle, Launching, Attached, Retracting }
-    private HookState state = HookState.Idle;
+    [Header("Sprites")]
+    [SerializeField] private Color ropeColor = new Color(0.55f, 0.27f, 0.07f);
+    [SerializeField] private float ropeWidth = 0.15f;
+
+    private enum HookState { idle, launching, attached, retracting }
+    private HookState state = HookState.idle;
 
     private GameObject grabObject;
-    private Rigidbody2D hookedRb;
-    private Vector2 hookOffset;
+    private Rigidbody2D hookedObject;
+    private LineRenderer line;
+    private Vector2 hookOffSet;
 
     private GameObject currentHook;
-    private Sprite     hookFallbackSprite;
+    private Sprite hookFallbackSprite;
 
     private Vector2 hookCurrentPos;
     private Vector2 hookVelocity;
-    private float   flightTimer;
-    private float   waveSize;
+    private float flightTimer;
 
     private void Awake()
     {
-        hookFallbackSprite = GenerateCircleSprite(16, ropeColor);
+        line = GetComponent<LineRenderer>();
+        line.useWorldSpace = true;
+        line.startWidth = ropeWidth;
+        line.endWidth = ropeWidth;
+        line.startColor = ropeColor;
+        line.endColor = ropeColor;
+        line.positionCount = segments;
+        line.enabled = false;
 
-        if (line == null) return;
-        line.useWorldSpace  = true;
-        line.startWidth     = ropeWidth;
-        line.endWidth       = ropeWidth;
-        line.startColor     = ropeColor;
-        line.endColor       = ropeColor;
-        line.positionCount  = segments;
-        line.enabled        = false;
+        hookFallbackSprite = GenerateCircleSprite(16, ropeColor);
     }
 
     private void Update()
     {
-        HandleInput();
-        UpdateHookVisual();
+        if (Input.GetMouseButtonDown(1) && state == HookState.idle)
+            TryHook();
+
+        if (Input.GetMouseButtonUp(1) && state != HookState.idle)
+            Release();
 
         switch (state)
         {
-            case HookState.Attached:
-                waveSize = Mathf.MoveTowards(waveSize, 0f, straightenSpeed * Time.deltaTime);
-                UpdateLine(grabObject.transform.TransformPoint(hookOffset));
+            case HookState.launching:
+                UpdateLaunching();
+                break;
+            case HookState.attached:
+                waveSize = Mathf.MoveTowards(waveSize, 0f, straightenLineSpeed * Time.deltaTime);
+                UpdateLine(grabObject.transform.TransformPoint(hookOffSet));
                 if (Input.GetAxis("Mouse ScrollWheel") < 0f) PullObject();
                 break;
-
-            case HookState.Retracting:
+            case HookState.retracting:
                 UpdateRetracting();
                 break;
         }
-    }
 
-    private void FixedUpdate()
-    {
-        if (state == HookState.Launching)
-            UpdateLaunching();
-    }
+        // Mover y rotar el hook visual
+        if (currentHook != null && state != HookState.idle)
+        {
+            currentHook.transform.position = hookCurrentPos;
 
-    private void HandleInput()
-    {
-        if (Input.GetMouseButtonDown(1) && state == HookState.Idle)
-            TryHook();
+            Vector2 dir = state == HookState.launching
+                ? hookVelocity
+                : (Vector2)transform.position - hookCurrentPos;
 
-        if (Input.GetMouseButtonUp(1) && state != HookState.Idle)
-            Release();
+            if (dir.sqrMagnitude > 0.001f)
+            {
+                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+                currentHook.transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+            }
+        }
     }
 
     private void TryHook()
     {
-        Vector2 origin    = transform.position;
-        Vector2 mousePos  = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        Vector2 origin = transform.position;
+        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         Vector2 direction = (mousePos - origin).normalized;
 
+        // Verificar que hay algo hookeable en esa dirección antes de lanzar
         RaycastHit2D hit = Physics2D.Raycast(origin, direction, grabDistance, hookMask);
         if (hit.collider == null || !hit.collider.CompareTag("Hookable")) return;
 
         hookCurrentPos = origin;
-        hookVelocity   = direction * launchSpeed;
-        flightTimer    = 0f;
-        waveSize       = 0f;
-        grabObject     = null;
-        hookedRb       = null;
+        hookVelocity = direction * launchSpeed;
+        flightTimer = 0f;
+        waveSize = 0f;
+        grabObject = null;
+        hookedObject = null;
 
         SpawnHook(origin);
-        if (line != null) { line.positionCount = segments; line.enabled = true; }
-        state = HookState.Launching;
+        line.positionCount = segments;
+        line.enabled = true;
+        state = HookState.launching;
     }
 
     private void UpdateLaunching()
     {
         Vector2 prevPos = hookCurrentPos;
 
-        hookVelocity   += Vector2.down * hookGravity * Time.fixedDeltaTime;
-        hookCurrentPos += hookVelocity  * Time.fixedDeltaTime;
-        flightTimer    += Time.fixedDeltaTime;
+        // Física de vuelo parabólico
+        hookVelocity += Vector2.down * hookGravity * Time.deltaTime;
+        hookCurrentPos += hookVelocity * Time.deltaTime;
+        flightTimer += Time.deltaTime;
 
         UpdateLine(hookCurrentPos);
 
+        // Linecast frame anterior → actual: detecta la superficie exacta sin tunelización
         RaycastHit2D hit = Physics2D.Linecast(prevPos, hookCurrentPos, hookMask);
         if (hit.collider != null && hit.collider.CompareTag("Hookable"))
         {
             grabObject = hit.collider.gameObject;
-            hookedRb   = grabObject.GetComponent<Rigidbody2D>();
-            hookOffset = grabObject.transform.InverseTransformPoint(hit.point);
+            hookedObject = grabObject.GetComponent<Rigidbody2D>();
+            hookOffSet = (Vector2)grabObject.transform.InverseTransformPoint(hit.point);
             Attach(hit.point);
             return;
         }
 
+        // Fallo: tiempo excedido o fuera de rango → retraer
         if (flightTimer >= maxFlightTime ||
             Vector2.Distance(hookCurrentPos, transform.position) > grabDistance)
         {
@@ -147,8 +158,8 @@ public class HookScript : MonoBehaviour
     private void Attach(Vector2 punto)
     {
         hookCurrentPos = punto;
-        waveSize       = startWaveSize;
-        state          = HookState.Attached;
+        waveSize = startWaveSize;
+        state = HookState.attached;
     }
 
     private void UpdateRetracting()
@@ -159,67 +170,36 @@ public class HookScript : MonoBehaviour
         if (Vector2.Distance(hookCurrentPos, transform.position) < 0.1f)
         {
             if (currentHook != null) { Destroy(currentHook); currentHook = null; }
-            if (line != null) line.enabled = false;
-            state = HookState.Idle;
+            line.enabled = false;
+            state = HookState.idle;
         }
     }
 
     private void PullObject()
     {
-        if (hookedRb == null) return;
+        if (hookedObject == null) return;
 
-        Vector2 worldHookPoint  = grabObject.transform.TransformPoint(hookOffset);
-        Vector2 dirToSelf       = ((Vector2)transform.position - worldHookPoint).normalized;
-        float   distance        = Vector2.Distance(transform.position, worldHookPoint);
+        Vector2 worldHookPoint = grabObject.transform.TransformPoint(hookOffSet);
+        Vector2 directionToSelf = ((Vector2)transform.position - worldHookPoint).normalized;
+        float distance = Vector2.Distance(transform.position, worldHookPoint);
 
-        if (distance < 1f)
-        {
-            Release();
-            return;
-        }
-
-        hookedRb.AddForceAtPosition(dirToSelf * grabForce * distance, worldHookPoint, ForceMode2D.Force);
-    }
-
-    private void Release()
-    {
-        grabObject = null;
-        hookedRb   = null;
-        waveSize   = 0f;
-        state      = HookState.Retracting;
-    }
-
-    private void UpdateHookVisual()
-    {
-        if (currentHook == null || state == HookState.Idle) return;
-
-        currentHook.transform.position = hookCurrentPos;
-
-        Vector2 dir = state == HookState.Launching
-            ? hookVelocity
-            : (Vector2)transform.position - hookCurrentPos;
-
-        if (dir.sqrMagnitude > 0.001f)
-        {
-            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-            currentHook.transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
-        }
+        if (distance < 1f) Release();
+        else hookedObject.AddForceAtPosition(directionToSelf * grabForce * distance, worldHookPoint, ForceMode2D.Force);
     }
 
     private void UpdateLine(Vector2 gancho)
     {
-        if (line == null) return;
-
         Vector2 jugador = transform.position;
-        float   dist    = Vector2.Distance(jugador, gancho);
+        float dist = Vector2.Distance(jugador, gancho);
 
         for (int i = 0; i < segments; i++)
         {
-            float t       = (float)i / (segments - 1);
+            float t = (float)i / (segments - 1);
+
             float curvedT = ropeProgressionCurve != null && ropeProgressionCurve.length > 0
                 ? ropeProgressionCurve.Evaluate(t) : t;
 
-            float   cuelgue = Mathf.Clamp(dist * 0.15f, 0.05f, 2.5f);
+            float cuelgue = Mathf.Clamp(dist * 0.15f, 0.05f, 2.5f);
             Vector2 control = (jugador + gancho) * 0.5f - Vector2.up * cuelgue;
 
             Vector2 punto =
@@ -230,7 +210,7 @@ public class HookScript : MonoBehaviour
             if (ropeAnimationCurve != null && ropeAnimationCurve.length > 0 && waveSize > 0f)
             {
                 Vector2 ropeDir = (gancho - jugador).normalized;
-                Vector2 perp    = new Vector2(-ropeDir.y, ropeDir.x);
+                Vector2 perp = new Vector2(-ropeDir.y, ropeDir.x);
                 punto += perp * ropeAnimationCurve.Evaluate(t) * waveSize;
             }
 
@@ -253,23 +233,28 @@ public class HookScript : MonoBehaviour
             var sr = currentHook.AddComponent<SpriteRenderer>();
             sr.sprite = hookFallbackSprite;
         }
-
         currentHook.transform.localScale = Vector3.one * hookScale;
+    }
+
+    private void Release()
+    {
+        grabObject = null;
+        hookedObject = null;
+        waveSize = 0f;
+        state = HookState.retracting;
     }
 
     private Sprite GenerateCircleSprite(int size, Color color)
     {
-        var    tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.filterMode = FilterMode.Point;
         Vector2 c = new Vector2(size * 0.5f, size * 0.5f);
-        float   r = size * 0.5f - 0.5f;
-
+        float r = size * 0.5f - 0.5f;
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
                 tex.SetPixel(x, y,
                     Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), c) <= r
                         ? color : Color.clear);
-
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, size, size), Vector2.one * 0.5f, size);
     }
