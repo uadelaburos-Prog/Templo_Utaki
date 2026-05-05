@@ -42,7 +42,7 @@ public class OneWayPlatform : MonoBehaviour
     {
         if (forzarBajar || !collision.gameObject.CompareTag("Player")) return;
 
-        if (Input.GetAxisRaw("Vertical") < -0.5f)
+        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
             StartCoroutine(DropRoutine());
     }
 

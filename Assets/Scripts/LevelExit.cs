@@ -15,7 +15,7 @@ public class LevelExit : MonoBehaviour
     {
         if (activado || !other.CompareTag("Player")) return;
         activado = true;
-        GameLoopManager.Instance?.Reintentar();
+        GameLoopManager.Instance?.NivelCompleto();
     }
 
     private void OnDrawGizmos()

@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 public class MenuManager : MonoBehaviour
 {
     [SerializeField] GameObject Options;
+    [SerializeField] string Escena;
 
     private int nextSceneIndex = 0;
     public int NextSceneIndex => nextSceneIndex;
@@ -22,7 +23,6 @@ public class MenuManager : MonoBehaviour
 
     public void Game()
     {
-        nextSceneIndex = SceneManager.GetActiveScene().buildIndex + 1;
-        SceneManager.LoadScene(nextSceneIndex);
+        SceneManager.LoadScene(Escena);
     }
 }

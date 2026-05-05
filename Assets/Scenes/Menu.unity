@@ -3987,6 +3987,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Options: {fileID: 750046822}
+  Escena: lvl1
 --- !u!4 &1501213265
 Transform:
   m_ObjectHideFlags: 0
@@ -4017,19 +4018,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88bc16a1c791d4f4cb8fbee429b09edf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  cristalesObtenidos: 0
   cristalesTotales: 0
   contadorMuertes: 0
   tiempoFadeOut: 0.2
   tiempoReinicio: 0.1
   nivelActual: 0
   totalNiveles: 0
+  sfxMuerte: {fileID: 0}
+  musicaNivel: {fileID: 0}
   fadePanel: {fileID: 348751784}
   txtCristales: {fileID: 0}
   txtMuertes: {fileID: 0}
   panelFinNivel: {fileID: 0}
   panelPausa: {fileID: 0}
+  panelOpciones: {fileID: 0}
   panelVictoria: {fileID: 0}
-  musicaFondo: {fileID: 8300000, guid: a2603bf919c258241bb36200efae5f80, type: 3}
 --- !u!114 &1501213267
 MonoBehaviour:
   m_ObjectHideFlags: 0
