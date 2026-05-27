@@ -64,6 +64,37 @@ public class CamaraScript : MonoBehaviour
         _activeMinY = minY; _activeMaxY = maxY;
 
         _allZones = FindObjectsByType<CameraZone>(FindObjectsSortMode.None);
+        SnapToPlayer();
+    }
+
+    // Teletransporta la cámara al jugador sin lerp — llamar al spawnear o al hacer respawn
+    public void SnapToPlayer()
+    {
+        if (player == null || cam == null) return;
+
+        UpdateActiveZone();
+
+        currentLookBehind     = 0f;
+        currentLookDown       = 0f;
+        _currentTerrainOffset = 0f;
+
+        Vector3 snapPos = new Vector3(
+            player.position.x,
+            player.position.y + verticalOffset,
+            transform.position.z
+        );
+
+        if (useBounds)
+        {
+            float halfH = cam.orthographicSize;
+            float halfW = cam.orthographicSize * cam.aspect;
+            float cMinX = _activeMinX + halfW, cMaxX = _activeMaxX - halfW;
+            float cMinY = _activeMinY + halfH, cMaxY = _activeMaxY - halfH;
+            if (cMaxX > cMinX) snapPos.x = Mathf.Clamp(snapPos.x, cMinX, cMaxX);
+            if (cMaxY > cMinY) snapPos.y = Mathf.Clamp(snapPos.y, cMinY, cMaxY);
+        }
+
+        transform.position = snapPos;
     }
 
     private void Update()

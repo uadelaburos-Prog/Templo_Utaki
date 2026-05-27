@@ -89,6 +89,14 @@ public class PlayerMovement : MonoBehaviour
         _groundFilter.useTriggers = false;
     }
 
+    // Llamado por GameLoopManager al respawnear en un checkpoint
+    public void RespawnAt(Vector3 pos)
+    {
+        transform.position = pos;
+        rb.linearVelocity  = Vector2.zero;
+        rb.gravityScale    = 1f;
+    }
+
     // Llamado por GameLoopManager cuando el jugador muere por un elemento (no el vacío)
     public void TriggerDeath()
     {

@@ -57,6 +57,7 @@ public class SpotlightOverlay : MonoBehaviour
 
     public void Activate(Transform player)
     {
+        _cam             = Camera.main;   // la cámara de escena cambia en cada reload
         _playerTransform = player;
         _currentAlpha    = 0f;
         _mat.SetFloat(PropMaxAlpha, 0f);

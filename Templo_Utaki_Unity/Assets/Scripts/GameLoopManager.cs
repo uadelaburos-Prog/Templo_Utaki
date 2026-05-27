@@ -45,10 +45,16 @@ public class GameLoopManager : MonoBehaviour
     [Tooltip("Segundos que el spotlight permanece visible tras el fade-in. 0 = dura hasta que la escena se recargue.")]
     [SerializeField] private float tiempoSpotlight  = 0f;
 
-    private float tiempoAcumulado;
-    private int   cristalesAcumulados;
-    private bool  isPaused;
-    private bool  isDying;
+    private float   tiempoAcumulado;
+    private int     cristalesAcumulados;
+    private bool    isPaused;
+    private bool    isDying;
+
+    // Estado del checkpoint — persiste entre recargas de escena (DontDestroyOnLoad)
+    private Vector3 _checkpointPos;
+    private bool    _checkpointActivo;
+    private int     _checkpointScena       = -1;
+    private int     _cristalesEnCheckpoint;
 
     // ── LIFECYCLE ─────────────────────────────────────────────────
 
@@ -84,6 +90,8 @@ public class GameLoopManager : MonoBehaviour
         ActualizarHUDCristales();
         ActualizarHUDMuertes();
         StartCoroutine(FadeInConEspera());
+        if (_checkpointActivo && _checkpointScena == scene.buildIndex)
+            StartCoroutine(AplicarSpawnCheckpoint());
         if (musicaNivel != null)
         {
             AudioManager.instance?.PlayClip(musicaNivel);
@@ -135,6 +143,23 @@ public class GameLoopManager : MonoBehaviour
         ActualizarHUDCristales();
     }
 
+    // Llamado por CheckpointZone al activarse — guarda posición y cristales actuales
+    public void GuardarCheckpoint(Vector3 pos)
+    {
+        _checkpointPos         = pos;
+        _checkpointActivo      = true;
+        _checkpointScena       = nivelActual;
+        _cristalesEnCheckpoint = cristalesObtenidos;
+    }
+
+    // Usado por CheckpointZone.Start() para restaurar estado visual al recargar
+    public bool EsEsteCheckpoint(Vector3 pos)
+    {
+        return _checkpointActivo
+            && _checkpointScena == nivelActual
+            && Vector3.Distance(_checkpointPos, pos) < 0.1f;
+    }
+
     public void NivelCompleto()
     {
         tiempoAcumulado     += Time.timeSinceLevelLoad;
@@ -153,6 +178,7 @@ public class GameLoopManager : MonoBehaviour
 
     public void ContinuarSiguienteNivel()
     {
+        LimpiarCheckpoint();
         Time.timeScale = 1f;
         if (panelFinNivel != null) panelFinNivel.SetActive(false);
 
@@ -201,9 +227,10 @@ public class GameLoopManager : MonoBehaviour
         TogglePause();
     }
 
-    // Botón "Reintentar" — reinicia el nivel actual con fade
+    // Botón "Reintentar" — reinicia el nivel completo (ignora checkpoints)
     public void Reintentar()
     {
+        LimpiarCheckpoint();
         CerrarPausaSilencioso();
         StartCoroutine(RutinaReinicio());
     }
@@ -225,8 +252,16 @@ public class GameLoopManager : MonoBehaviour
     // Botón "Menú Principal" — carga la escena índice 0
     public void IrAlMenuPrincipal()
     {
+        LimpiarCheckpoint();
         CerrarPausaSilencioso();
         StartCoroutine(CargarEscenaConFade(0));
+    }
+
+    private void LimpiarCheckpoint()
+    {
+        _checkpointActivo      = false;
+        _checkpointScena       = -1;
+        _cristalesEnCheckpoint = 0;
     }
 
     // Cierra la pausa sin animación (usada antes de cargar escena)
@@ -239,6 +274,19 @@ public class GameLoopManager : MonoBehaviour
     }
 
     // ── CORRUTINAS ────────────────────────────────────────────────
+
+    // Posiciona al jugador en el checkpoint después de que Start() ya corrió (1 frame delay)
+    private IEnumerator AplicarSpawnCheckpoint()
+    {
+        yield return null;
+        var player = FindFirstObjectByType<PlayerMovement>();
+        if (player == null) yield break;
+
+        player.RespawnAt(_checkpointPos);
+        CamaraScript.Instance?.SnapToPlayer();
+        cristalesObtenidos = _cristalesEnCheckpoint;
+        ActualizarHUDCristales();
+    }
 
     private IEnumerator RutinaMuerteDramatica()
     {
@@ -283,11 +331,6 @@ public class GameLoopManager : MonoBehaviour
 
         cristalesObtenidos      = 0;
         op.allowSceneActivation = true;
-
-        while (!op.isDone)
-            yield return null;
-
-        yield return StartCoroutine(FadeIn());
     }
 
     private IEnumerator CargarEscenaConFade(int indice)
