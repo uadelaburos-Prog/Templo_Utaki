@@ -34,6 +34,7 @@ public class FragilePlatform : MonoBehaviour
     {
         if (_isBreaking) return;
         if (!collision.collider.CompareTag("Player")) return;
+        if (collision.collider.bounds.min.y < _col.bounds.max.y - 0.1f) return;
         StartCoroutine(RutinaRotura());
     }
 

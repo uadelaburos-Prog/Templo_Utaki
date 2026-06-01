@@ -122,7 +122,11 @@ public class ReactiveWall : MonoBehaviour
         }
 
         transform.rotation = Quaternion.Euler(0f, 0f, endRot);
-        col.enabled        = false;
+
+        // La pared queda horizontal como puente sólido pisable
+        if (playerCol != null)
+            Physics2D.IgnoreCollision(col, playerCol, false);
+        rb.bodyType = RigidbodyType2D.Static;
     }
 
     private Sprite GenerarPlaceholder()

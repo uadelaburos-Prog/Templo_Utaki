@@ -10,7 +10,6 @@ public class GameLoopManager : MonoBehaviour
     [Header("Cristales")]
     [SerializeField] private int cristalesObtenidos = 0;
     [SerializeField] private int cristalesTotales;
-    [SerializeField] private GameObject prefabCristal; // Sirve para que el contador de cristales no se muestre en el menú principal
 
     [Header("Muerte / Reinicio")]
     [SerializeField] private int   contadorMuertes = 0;
@@ -393,7 +392,6 @@ public class GameLoopManager : MonoBehaviour
 
     private void ActualizarHUDCristales()
     {
-        prefabCristal.SetActive(SceneManager.GetActiveScene().buildIndex != 0); // Mostrar contador cuando no estamos en el menú principal
         if (txtCristales != null)
             txtCristales.text = $"{cristalesObtenidos}<color=#4A3E30>/</color><color=#C8A040>{cristalesTotales}</color>";
     }

@@ -22,8 +22,8 @@ public class KeyItem : MonoBehaviour
     [SerializeField] private float maxCargaTiempo = 1.5f;
 
     [Header("Portada")]
-    [Tooltip("Offset desde el centro del jugador. X se invierte automáticamente según la dirección.")]
-    [SerializeField] private Vector2 offsetPortada = new Vector2(0.45f, 0.3f);
+    [Tooltip("Offset desde el centro visual del sprite del jugador. Y negativo = más abajo (cintura), positivo = más arriba (hombros). X se invierte según la dirección.")]
+    [SerializeField] private Vector2 offsetPortada = new Vector2(0.3f, -0.1f);
 
     [Header("Física")]
     [Tooltip("Amortiguación lineal cuando la llave está en el suelo — evita que se deslice.")]
@@ -111,10 +111,14 @@ public class KeyItem : MonoBehaviour
 
         if (_estado == Estado.Portada && _player != null)
         {
-            // Invertir X según la dirección del sprite del jugador
-            float signoX  = (_playerSr != null && _playerSr.flipX) ? -1f : 1f;
+            // Usar el centro visual del sprite como origen — independiente del pivot del transform
+            Vector2 centroJugador = _playerSr != null
+                ? (Vector2)_playerSr.bounds.center
+                : (Vector2)_player.position;
+
+            float   signoX = (_playerSr != null && _playerSr.flipX) ? -1f : 1f;
             Vector2 offset = new Vector2(offsetPortada.x * signoX, offsetPortada.y);
-            _rb.MovePosition((Vector2)_player.position + offset);
+            _rb.MovePosition(centroJugador + offset);
         }
     }
 

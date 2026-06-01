@@ -1,10 +1,14 @@
 using System.Collections;
 using UnityEngine;
 
-// Setup: Layer "Enemy" + Rigidbody2D (Kinematic, Freeze Rotation) + Collider2D.
-// Hijos vacíos PuntoA y PuntoB definen el recorrido de patrulla.
-// Feedback "!": crear hijo con SpriteRenderer (sprite "!") posicionado sobre la cabeza → asignar a iconoAlerta.
+// Setup del prefab:
+//   - Layer "Enemy"
+//   - Rigidbody2D : Kinematic, Gravity Scale 0, Freeze Rotation Z
+//   - Collider2D  : sólido (no trigger) — el jugador no lo atraviesa
+//   - Hijos vacíos PuntoA y PuntoB definen el recorrido de patrulla
+//   - iconoAlerta : hijo con SpriteRenderer sprite "!" sobre la cabeza
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(Collider2D))]
 [RequireComponent(typeof(SpriteRenderer))]
 public class PatrollerAI : MonoBehaviour
 {
@@ -15,12 +19,14 @@ public class PatrollerAI : MonoBehaviour
     [Tooltip("Pausa en cada extremo de la ruta (segundos).")]
     [SerializeField] private float     duracionIdle      = 0.6f;
 
+    [Header("Detección")]
+    [SerializeField] private float radioDeteccion = 5f;
+    [Tooltip("Radio al que el jugador debe alejarse para abandonar la persecución.")]
+    [SerializeField] private float radioAbandonar = 7f;
+
     [Header("Persecución")]
     [SerializeField] private float velocidadPersecucion = 4f;
     [SerializeField] private float velocidadRegreso     = 3f;
-    [SerializeField] private float radioDeteccion        = 5f;
-    [Tooltip("Radio al que el jugador debe alejarse para que el enemigo abandone la persecución.")]
-    [SerializeField] private float radioAbandonar        = 7f;
 
     [Header("Audio")]
     [SerializeField] private AudioClip sfxAlerta;
@@ -29,45 +35,57 @@ public class PatrollerAI : MonoBehaviour
     [Tooltip("Hijo con SpriteRenderer '!' posicionado sobre la cabeza del enemigo.")]
     [SerializeField] private GameObject iconoAlerta;
 
-    private enum Estado { Idle, Patrulla, Persecucion, Regreso }
-    private Estado estado    = Estado.Patrulla;
+    private enum Estado { Idle, Patrulla, Persecucion, Regreso, Muerto }
+    private Estado _estado = Estado.Patrulla;
     private float  _idleTimer;
 
-    private Rigidbody2D    rb;
-    private SpriteRenderer sr;
-    private Transform      player;
-    private Transform      objetivoPatrulla;
+    private Rigidbody2D    _rb;
+    private SpriteRenderer _sr;
+    private Transform      _player;
+    private Transform      _objetivoPatrulla;
+
+    // ── Lifecycle ─────────────────────────────────────────────────
 
     private void Awake()
     {
-        rb = GetComponent<Rigidbody2D>();
-        sr = GetComponent<SpriteRenderer>();
+        _rb = GetComponent<Rigidbody2D>();
+        _sr = GetComponent<SpriteRenderer>();
+
+        _rb.bodyType       = RigidbodyType2D.Kinematic;
+        _rb.gravityScale   = 0f;
+        _rb.freezeRotation = true;
 
         if (iconoAlerta != null) iconoAlerta.SetActive(false);
     }
 
     private void Start()
     {
-        var go = GameObject.FindWithTag("Player");
-        if (go != null) player = go.transform;
+        if (puntoA == null || puntoB == null)
+        {
+            enabled = false;
+            return;
+        }
 
-        objetivoPatrulla = puntoA;
+        var go = GameObject.FindWithTag("Player");
+        if (go != null) _player = go.transform;
+
+        _objetivoPatrulla = puntoA;
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
-        if (player == null) return;
+        if (_estado == Estado.Muerto || _player == null) return;
 
-        float dist = Vector2.Distance(transform.position, player.position);
+        float dist = Vector2.Distance(transform.position, _player.position);
 
-        switch (estado)
+        switch (_estado)
         {
             case Estado.Idle:
-                _idleTimer -= Time.deltaTime;
+                _idleTimer -= Time.fixedDeltaTime;
                 if (dist <= radioDeteccion)
                     TransicionAPersecucion();
                 else if (_idleTimer <= 0f)
-                    estado = Estado.Patrulla;
+                    _estado = Estado.Patrulla;
                 break;
 
             case Estado.Patrulla:
@@ -80,7 +98,7 @@ public class PatrollerAI : MonoBehaviour
                 Perseguir();
                 if (dist > radioAbandonar)
                 {
-                    estado = Estado.Regreso;
+                    _estado = Estado.Regreso;
                     OcultarIconoAlerta();
                 }
                 break;
@@ -93,12 +111,69 @@ public class PatrollerAI : MonoBehaviour
         }
     }
 
+    // ── Transición ────────────────────────────────────────────────
+
     private void TransicionAPersecucion()
     {
         AudioManager.instance?.FxSoundEffect(sfxAlerta, transform, 1f);
-        estado = Estado.Persecucion;
+        _estado = Estado.Persecucion;
         MostrarIconoAlerta();
     }
+
+    // ── Comportamientos ───────────────────────────────────────────
+
+    private void Patrullar()
+    {
+        MoverHacia(_objetivoPatrulla.position, velocidadPatrulla);
+
+        if (Vector2.Distance(transform.position, _objetivoPatrulla.position) < 0.1f)
+        {
+            _objetivoPatrulla = _objetivoPatrulla == puntoA ? puntoB : puntoA;
+            _idleTimer        = duracionIdle;
+            _estado           = Estado.Idle;
+        }
+    }
+
+    private void Perseguir() => MoverHacia(_player.position, velocidadPersecucion);
+
+    private void Regresar()
+    {
+        MoverHacia(_objetivoPatrulla.position, velocidadRegreso);
+        if (Vector2.Distance(transform.position, _objetivoPatrulla.position) < 0.1f)
+            _estado = Estado.Patrulla;
+    }
+
+    // ── Movimiento ────────────────────────────────────────────────
+
+    private void MoverHacia(Vector3 destino, float velocidad)
+    {
+        Vector2 dir  = ((Vector2)destino - _rb.position).normalized;
+        float   paso = velocidad * Time.fixedDeltaTime;
+        _rb.MovePosition(_rb.position + dir * paso);
+
+        if (Mathf.Abs(dir.x) > 0.01f)
+            _sr.flipX = dir.x < 0;
+    }
+
+    // ── Muerte ────────────────────────────────────────────────────
+
+    public void Morir()
+    {
+        if (_estado == Estado.Muerto) return;
+        _estado = Estado.Muerto;
+        OcultarIconoAlerta();
+        Destroy(gameObject);
+    }
+
+    // ── Contacto ──────────────────────────────────────────────────
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+            GameLoopManager.Instance?.PlayerDied();
+    }
+
+    // ── Feedback ──────────────────────────────────────────────────
 
     private void MostrarIconoAlerta()
     {
@@ -120,74 +195,25 @@ public class PatrollerAI : MonoBehaviour
         iconoAlerta.transform.localScale = Vector3.zero;
 
         float t = 0f;
-        const float popDuration = 0.12f;
-        while (t < popDuration)
+        const float duracion = 0.12f;
+        while (t < duracion)
         {
             t += Time.deltaTime;
-            iconoAlerta.transform.localScale = Vector3.one * Mathf.SmoothStep(0f, 1f, t / popDuration);
+            iconoAlerta.transform.localScale = Vector3.one * Mathf.SmoothStep(0f, 1f, t / duracion);
             yield return null;
         }
         iconoAlerta.transform.localScale = Vector3.one;
-        // queda visible hasta que OcultarIconoAlerta() lo desactive
-    }
-
-    // ── Comportamientos ───────────────────────────────────────────
-
-    private void Patrullar()
-    {
-        MoverHacia(objetivoPatrulla.position, velocidadPatrulla);
-
-        if (Vector2.Distance(transform.position, objetivoPatrulla.position) < 0.1f)
-        {
-            objetivoPatrulla = objetivoPatrulla == puntoA ? puntoB : puntoA;
-            _idleTimer       = duracionIdle;
-            estado           = Estado.Idle;
-        }
-    }
-
-    private void Perseguir()
-    {
-        MoverHacia(player.position, velocidadPersecucion);
-    }
-
-    private void Regresar()
-    {
-        MoverHacia(objetivoPatrulla.position, velocidadRegreso);
-
-        if (Vector2.Distance(transform.position, objetivoPatrulla.position) < 0.1f)
-            estado = Estado.Patrulla;
-    }
-
-    // ── Movimiento ────────────────────────────────────────────────
-
-    private void MoverHacia(Vector3 destino, float velocidad)
-    {
-        Vector2 dir = ((Vector2)destino - rb.position).normalized;
-        rb.MovePosition(rb.position + dir * velocidad * Time.fixedDeltaTime);
-
-        if (Mathf.Abs(dir.x) > 0.01f)
-            sr.flipX = dir.x < 0;
-    }
-
-    // ── Contacto con jugador ──────────────────────────────────────
-
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (collision.gameObject.CompareTag("Player"))
-            GameLoopManager.Instance?.PlayerDied();
     }
 
     // ── Gizmos ────────────────────────────────────────────────────
 
     private void OnDrawGizmos()
     {
-        // Radio de detección (rojo) y abandono (naranja)
         Gizmos.color = new Color(1f, 0f, 0f, 0.2f);
         Gizmos.DrawWireSphere(transform.position, radioDeteccion);
         Gizmos.color = new Color(1f, 0.5f, 0f, 0.12f);
         Gizmos.DrawWireSphere(transform.position, radioAbandonar);
 
-        // Ruta de patrulla (amarillo)
         if (puntoA == null || puntoB == null) return;
         Gizmos.color = Color.yellow;
         Gizmos.DrawLine(puntoA.position, puntoB.position);

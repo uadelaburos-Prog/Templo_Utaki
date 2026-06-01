@@ -337,6 +337,8 @@ public class GrappleScript : MonoBehaviour
             : Vector2.zero;
 
         AudioManager.instance?.FxSoundEffect(sfxEnganchar, transform, 1f);
+
+        hitCol?.GetComponent<BreakableAnchor>()?.OnHooked(this);
     }
 
     private void GrappleSwing()

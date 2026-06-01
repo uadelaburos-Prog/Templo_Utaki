@@ -1,16 +1,18 @@
 using UnityEngine;
 
 // Estados visuales del ciclo retráctil:
-//   Retraido     → oculto bajo el suelo, sin daño
-//   Asomando     → punta visible (fraccionAsomando del desplazamiento), sin daño — aviso físico
+//   Retraido     → oculto en la pared/suelo/techo, sin daño
+//   Asomando     → punta visible (fraccionAsomando del desplazamiento), sin daño — aviso
 //   Desplegado   → completamente fuera, CON daño
 [RequireComponent(typeof(Rigidbody2D))]
 public class SpikeHazard : MonoBehaviour
 {
-    public enum SpikeMode { Estatico, Retractil }
+    public enum SpikeMode        { Estatico, Retractil }
+    public enum DireccionSalida  { Arriba, Abajo, Izquierda, Derecha }
 
     [Header("Modo")]
-    [SerializeField] private SpikeMode modo = SpikeMode.Estatico;
+    [SerializeField] private SpikeMode       modo           = SpikeMode.Estatico;
+    [SerializeField] private DireccionSalida direccionSalida = DireccionSalida.Arriba;
 
     [Header("Retráctil — tiempos")]
     [Tooltip("Segundos completamente oculto.")]
@@ -23,8 +25,8 @@ public class SpikeHazard : MonoBehaviour
     [Header("Retráctil — movimiento")]
     [Tooltip("Velocidad de extensión y retracción (u/s).")]
     [SerializeField] private float velocidadMover = 5f;
-    [Tooltip("Desplazamiento total al retraerse (negativo = baja hacia el suelo).")]
-    [SerializeField] private float desplazamiento = -0.6f;
+    [Tooltip("Distancia de retracción en unidades. DireccionSalida determina hacia dónde.")]
+    [SerializeField] private float desplazamiento = 0.6f;
     [Tooltip("Fracción del desplazamiento visible en estado Asomando (0.05–0.5).")]
     [SerializeField, Range(0.05f, 0.5f)] private float fraccionAsomando = 0.25f;
     [Tooltip("Desfase del ciclo (0–1). Desincroniza pinchos del mismo grupo.")]
@@ -44,18 +46,20 @@ public class SpikeHazard : MonoBehaviour
     private Collider2D  _col;
 
     // ── Init (llamado por SpikeGroup) ────────────────────────────────
-    public void Init(SpikeMode nuevoModo, float tRetraido, float tAsomando, float tExtendido,
+    public void Init(SpikeMode nuevoModo, DireccionSalida dirSalida,
+                     float tRetraido, float tAsomando, float tExtendido,
                      float vel, float desp, float fracAsomando, float fase, float delay = 0f)
     {
-        modo             = nuevoModo;
-        tiempoRetraido   = tRetraido;
-        tiempoAsomando   = tAsomando;
-        tiempoExtendido  = tExtendido;
-        velocidadMover   = vel;
-        desplazamiento   = desp;
+        modo            = nuevoModo;
+        direccionSalida = dirSalida;
+        tiempoRetraido  = tRetraido;
+        tiempoAsomando  = tAsomando;
+        tiempoExtendido = tExtendido;
+        velocidadMover  = vel;
+        desplazamiento  = desp;
         fraccionAsomando = fracAsomando;
-        faseInicial      = fase;
-        delayInicial     = delay;
+        faseInicial     = fase;
+        delayInicial    = delay;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -70,11 +74,25 @@ public class SpikeHazard : MonoBehaviour
     {
         _col          = GetComponent<Collider2D>();
         _posExtendida = _rb.position;
-        _posRetraida  = _posExtendida + Vector2.up * desplazamiento;
+        // La posición retraída es el opuesto de la dirección de salida
+        _posRetraida  = _posExtendida - VectorSalida() * Mathf.Abs(desplazamiento);
         _posAsomando  = Vector2.Lerp(_posRetraida, _posExtendida, fraccionAsomando);
 
         if (modo == SpikeMode.Retractil)
             IniciarCiclo();
+    }
+
+    // ── Dirección ────────────────────────────────────────────────────
+    private Vector2 VectorSalida()
+    {
+        return direccionSalida switch
+        {
+            DireccionSalida.Arriba    => Vector2.up,
+            DireccionSalida.Abajo     => Vector2.down,
+            DireccionSalida.Izquierda => Vector2.left,
+            DireccionSalida.Derecha   => Vector2.right,
+            _                         => Vector2.up
+        };
     }
 
     private void IniciarCiclo()
@@ -103,9 +121,9 @@ public class SpikeHazard : MonoBehaviour
     // ── Transiciones ────────────────────────────────────────────────
     private void EntrarRetraido(float duracion)
     {
-        _estado    = Estado.Retraido;
-        _timer     = duracion;
-        _rb.position       = _posRetraida;
+        _estado      = Estado.Retraido;
+        _timer       = duracion;
+        _rb.position = _posRetraida;
         if (_col) _col.enabled = false;
     }
 
@@ -178,10 +196,9 @@ public class SpikeHazard : MonoBehaviour
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (!other.CompareTag("Player")) return;
-        // Retráctil: solo daña cuando está completamente desplegado
         if (modo == SpikeMode.Retractil && _estado != Estado.Desplegado) return;
 
-        if (_col) _col.enabled = false; // evita doble trigger
+        if (_col) _col.enabled = false;
         GameLoopManager.Instance?.PlayerDied();
     }
 
@@ -193,7 +210,9 @@ public class SpikeHazard : MonoBehaviour
 
         if (modo == SpikeMode.Retractil)
         {
-            Vector3 retPos = transform.position + Vector3.up * desplazamiento;
+            Vector2 dir    = VectorSalida();
+            float   dist   = Mathf.Abs(desplazamiento);
+            Vector3 retPos = transform.position - (Vector3)(dir * dist);
             Vector3 asoPos = Vector3.Lerp(retPos, transform.position, fraccionAsomando);
 
             Gizmos.color = new Color(1f, 0.5f, 0f, 0.7f);
@@ -202,6 +221,10 @@ public class SpikeHazard : MonoBehaviour
 
             Gizmos.color = new Color(1f, 1f, 0f, 0.7f);
             Gizmos.DrawWireSphere(asoPos, 0.1f);
+
+            // Flecha indicando la dirección de salida
+            Gizmos.color = new Color(0f, 1f, 0.5f, 0.8f);
+            Gizmos.DrawLine(transform.position, transform.position + (Vector3)(dir * 0.3f));
         }
     }
 }

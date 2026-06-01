@@ -98,8 +98,10 @@ GameObject:
   - component: {fileID: 2730280342256841789}
   - component: {fileID: 3009036103344207098}
   - component: {fileID: 165810278673767801}
-  - component: {fileID: 5835661321634975244}
   - component: {fileID: -1138934691303199429}
+  - component: {fileID: -2010221633320098421}
+  - component: {fileID: 4929005248361695912}
+  - component: {fileID: -3399500986034830657}
   m_Layer: 9
   m_Name: Enemy
   m_TagString: Untagged
@@ -205,28 +207,6 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 4
---- !u!114 &5835661321634975244
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5153240965361300546}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1288f62ef4a503c46b1c2c3218ae98e1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  puntoA: {fileID: 0}
-  puntoB: {fileID: 0}
-  velocidadPatrulla: 3
-  duracionIdle: 0.6
-  velocidadPersecucion: 2
-  velocidadRegreso: 3
-  radioDeteccion: 17.4
-  radioAbandonar: 17.34
-  sfxAlerta: {fileID: 8300000, guid: 54ca3af6c42f5f441b39d5e44735bc69, type: 3}
-  iconoAlerta: {fileID: 3664471640875025331}
 --- !u!70 &-1138934691303199429
 CapsuleCollider2D:
   m_ObjectHideFlags: 0
@@ -264,3 +244,74 @@ CapsuleCollider2D:
   m_Offset: {x: 0, y: 0}
   m_Size: {x: 1, y: 2}
   m_Direction: 0
+--- !u!114 &-2010221633320098421
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5153240965361300546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0aedb6f8f6fc434db27536e3d3c8733, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sourceRenderer: {fileID: 3009036103344207098}
+  spawnInterval: 0.03
+  fadeDuration: 0.15
+  tintColor: {r: 0.9339623, g: 0.8943129, b: 0.8943129, a: 0.6}
+--- !u!95 &4929005248361695912
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5153240965361300546}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 0}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &-3399500986034830657
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5153240965361300546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 785254b85d1386149a759c430b4d7e67, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  puntoA: {fileID: 0}
+  puntoB: {fileID: 0}
+  velocidadPatrulla: 2
+  duracionIdle: 0.6
+  radioDeteccion: 12
+  radioAbandonar: 12
+  orbitRadius: 3
+  orbitVelocity: 2
+  chaseSpeed: 3
+  floatSpeed: 1.2
+  floatAmplitude: 0.4
+  dashSpeed: 14
+  dashDistance: 8
+  cooldown: 2
+  playerStillThreshold: 0.5
+  playerStillTime: 0.5
+  spectralWallMask:
+    serializedVersion: 2
+    m_Bits: 65536
+  iconoAlerta: {fileID: 3664471640875025331}
+  sfxAlerta: {fileID: 0}

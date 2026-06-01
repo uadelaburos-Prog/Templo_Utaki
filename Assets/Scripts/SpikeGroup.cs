@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class SpikeGroup : MonoBehaviour
 {
+    public enum ModoCiclo { Sincronizado, Desfasado, Secuencial }
+
     [Header("Prefab")]
     [Tooltip("Prefab con SpikeHazard adjunto.")]
     [SerializeField] private SpikeHazard spikePrefab;
@@ -11,7 +13,8 @@ public class SpikeGroup : MonoBehaviour
     [SerializeField] private Vector2[] posiciones;
 
     [Header("Configuración compartida")]
-    [SerializeField] private SpikeHazard.SpikeMode modo = SpikeHazard.SpikeMode.Estatico;
+    [SerializeField] private SpikeHazard.SpikeMode       modo           = SpikeHazard.SpikeMode.Estatico;
+    [SerializeField] private SpikeHazard.DireccionSalida direccionSalida = SpikeHazard.DireccionSalida.Arriba;
     [Tooltip("Segundos completamente oculto.")]
     [SerializeField] private float tiempoRetraido  = 1.5f;
     [Tooltip("Segundos con la punta visible (aviso, sin daño).")]
@@ -23,10 +26,10 @@ public class SpikeGroup : MonoBehaviour
     [SerializeField] private float desplazamiento  = -0.6f;
     [Tooltip("Fracción del desplazamiento visible en estado Asomando.")]
     [SerializeField, Range(0.05f, 0.5f)] private float fraccionAsomando = 0.25f;
-    [Tooltip("Si está activo, distribuye la fase inicial de forma uniforme entre todos los pinchos.")]
-    [SerializeField] private bool  desfasarAutomatico = true;
-    [Tooltip("Segundos de espera inicial antes del primer ciclo. Anula el desfase automático.")]
-    [SerializeField] private float delayInicial = 0f;
+    [Tooltip("Sincronizado = todos a la vez · Desfasado = fases distribuidas · Secuencial = uno tras otro.")]
+    [SerializeField] private ModoCiclo modoCiclo = ModoCiclo.Desfasado;
+    [Tooltip("Segundos entre el inicio de cada pincho en modo Secuencial.")]
+    [SerializeField] private float delayEntreSpikes = 0.15f;
 
     private void Start()
     {
@@ -37,12 +40,22 @@ public class SpikeGroup : MonoBehaviour
             Vector3     worldPos = transform.position + (Vector3)posiciones[i];
             SpikeHazard spike    = Instantiate(spikePrefab, worldPos, transform.rotation, transform);
 
-            float fase = desfasarAutomatico && posiciones.Length > 1
-                ? (float)i / posiciones.Length
-                : 0f;
+            float fase  = 0f;
+            float delay = 0f;
 
-            spike.Init(modo, tiempoRetraido, tiempoAsomando, tiempoExtendido,
-                       velocidadMover, desplazamiento, fraccionAsomando, fase, delayInicial);
+            switch (modoCiclo)
+            {
+                case ModoCiclo.Desfasado:
+                    fase = posiciones.Length > 1 ? (float)i / posiciones.Length : 0f;
+                    break;
+                case ModoCiclo.Secuencial:
+                    delay = i * delayEntreSpikes;
+                    break;
+                // Sincronizado: fase = 0, delay = 0
+            }
+
+            spike.Init(modo, direccionSalida, tiempoRetraido, tiempoAsomando, tiempoExtendido,
+                       velocidadMover, desplazamiento, fraccionAsomando, fase, delay);
         }
     }
 

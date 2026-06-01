@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 3335036431558236026}
   - component: {fileID: 3497290760173857823}
   - component: {fileID: 5846166792547820768}
-  m_Layer: 9
+  m_Layer: 14
   m_Name: FragilePlatform 1
   m_TagString: Floor
   m_Icon: {fileID: 0}
