@@ -2,7 +2,8 @@
     "name": "TemploUtaki",
     "rootNamespace": "",
     "references": [
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

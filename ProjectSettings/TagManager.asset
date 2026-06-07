@@ -8,6 +8,9 @@ TagManager:
   - Hookable
   - Key
   - Enemy
+  - MummyEnemy
+  - Hazard
+  - Fire
   layers:
   - Default
   - TransparentFX

@@ -19,7 +19,17 @@ public class AudioManager : MonoBehaviour
         }
         else
         {
-            Destroy(gameObject);
+            // IMPORTANTE: NO destruir el GameObject completo.
+            // Este AudioManager puede compartir su GO con MenuManager u otros scripts.
+            // Si hacemos Destroy(gameObject) destruimos MenuManager y el boton Play
+            // queda apuntando a un componente muerto → no responde al click.
+            // Solo silenciamos y destruimos los AudioSources hijos duplicados.
+            foreach (AudioSource s in GetComponentsInChildren<AudioSource>(true))
+            {
+                s.Stop();
+                Destroy(s.gameObject);
+            }
+            Destroy(this);
         }
     }
 
@@ -65,16 +75,24 @@ public class AudioManager : MonoBehaviour
         StartCoroutine(SwapingVolume(clip));
     }
 
+    public void StopMusic()
+    {
+        if (audioSource.isPlaying)
+            audioSource.Stop();
+    }
+
     private IEnumerator SwapingVolume(AudioClip clip)
     {
-        float maxVolumen = audioSource.volume;
+        // Si el volumen esta en 0 (fade-out interrumpido previo), usar 1 como objetivo
+        // para evitar que la fade-in nunca se ejecute (while 0 < 0 = falso inmediato).
+        float maxVolumen = (audioSource.volume > 0f) ? audioSource.volume : 1f;
         float currentVolumen = audioSource.volume;
 
         if (audioSource.isPlaying)
         {
             while (currentVolumen > 0)
             {
-                currentVolumen -= Time.deltaTime / 4;
+                currentVolumen -= Time.unscaledDeltaTime / 4;
                 audioSource.volume = currentVolumen;
                 yield return null;
             }
@@ -87,7 +105,7 @@ public class AudioManager : MonoBehaviour
 
         while (currentVolumen < maxVolumen)
         {
-            currentVolumen += Time.deltaTime / 4;
+            currentVolumen += Time.unscaledDeltaTime / 4;
             audioSource.volume = currentVolumen;
             yield return null;
         }

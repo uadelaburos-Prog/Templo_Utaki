@@ -156,5 +156,5 @@ MonoBehaviour:
   - {fileID: 5806679116711685309, guid: 99d7bd01603e16f46926442363dcfe74, type: 3}
   - {fileID: -3488626998679702108, guid: 99d7bd01603e16f46926442363dcfe74, type: 3}
   - {fileID: -6767541636299753863, guid: 99d7bd01603e16f46926442363dcfe74, type: 3}
-  duracionFrame: 0.08
+  duracionFrame: 0.15
   sfxApertura: {fileID: 0}

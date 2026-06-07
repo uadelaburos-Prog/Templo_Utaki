@@ -30,3 +30,4 @@ sysinfo.txt
 # Archivos Claude locales (nunca versionar)
 CLAUDE.md
 SESION.md
+.claude/settings.local.json

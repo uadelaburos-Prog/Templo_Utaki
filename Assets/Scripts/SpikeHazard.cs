@@ -195,11 +195,21 @@ public class SpikeHazard : MonoBehaviour
     // ── Daño ─────────────────────────────────────────────────────────
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!other.CompareTag("Player")) return;
         if (modo == SpikeMode.Retractil && _estado != Estado.Desplegado) return;
 
-        if (_col) _col.enabled = false;
-        GameLoopManager.Instance?.PlayerDied();
+        if (other.CompareTag("Player"))
+        {
+            if (_col) _col.enabled = false;
+            GameLoopManager.Instance?.PlayerDied();
+            return;
+        }
+
+        if (other.CompareTag("MummyEnemy"))
+        {
+            var momia = other.GetComponent<MummyAI>();
+            if (momia != null) momia.Morir();
+            else               Destroy(other.gameObject);
+        }
     }
 
     // ── Gizmos ───────────────────────────────────────────────────────

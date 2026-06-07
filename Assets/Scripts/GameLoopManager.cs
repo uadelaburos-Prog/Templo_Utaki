@@ -87,6 +87,19 @@ public class GameLoopManager : MonoBehaviour
         Time.timeScale      = 1f;
         AudioListener.pause = false;
         if (spotlightOverlay != null) spotlightOverlay.gameObject.SetActive(false);
+
+        // Al volver al menu (escena 0) el Canvas DDOL del GLM no debe bloquear la UI del menu.
+        // El panel queda oculto de inmediato; el menu maneja su propia presentacion visual.
+        if (scene.buildIndex == 0)
+        {
+            if (fadePanel != null)
+            {
+                fadePanel.alpha = 0f;
+                fadePanel.gameObject.SetActive(false);
+            }
+            return;
+        }
+
         ActualizarHUDCristales();
         ActualizarHUDMuertes();
         StartCoroutine(FadeInConEspera());
@@ -110,6 +123,11 @@ public class GameLoopManager : MonoBehaviour
 
     private void Update()
     {
+        // No procesar atajos de teclado en la escena del menu (indice 0).
+        // El GameLoopManager persiste entre escenas (DDOL) y su Update correria
+        // en el menu abriendo el panel de pausa sobre los botones del menu.
+        if (nivelActual == 0) return;
+
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))
             TogglePause();
 
@@ -169,11 +187,6 @@ public class GameLoopManager : MonoBehaviour
 
         if (panelFinNivel != null) panelFinNivel.SetActive(true);
         Time.timeScale = 0f;
-    }
-
-    public void IniciarJuego()
-    {
-        StartCoroutine(CargarEscenaConFade(1));
     }
 
     public void ContinuarSiguienteNivel()
@@ -254,6 +267,18 @@ public class GameLoopManager : MonoBehaviour
     {
         LimpiarCheckpoint();
         CerrarPausaSilencioso();
+
+        // Ocultar paneles que quedan activos en el Canvas DDOL — si persisten,
+        // tapan la UI del menu y el jugador no puede interactuar con ella.
+        if (panelFinNivel != null) panelFinNivel.SetActive(false);
+        if (panelVictoria != null) panelVictoria.SetActive(false);
+
+        // Cancelar corrutinas en vuelo (RutinaReinicio, RutinaMuerteDramatica…).
+        // Sin esto, una RutinaReinicio pendiente podria cargar la escena de juego
+        // de forma asincrona incluso mientras el jugador ya esta en el menu.
+        StopAllCoroutines();
+
+        isDying = false;
         StartCoroutine(CargarEscenaConFade(0));
     }
 
@@ -344,11 +369,8 @@ public class GameLoopManager : MonoBehaviour
             yield return null;
 
         op.allowSceneActivation = true;
-
-        while (!op.isDone)
-            yield return null;
-
-        yield return StartCoroutine(FadeIn());
+        // El fade-in lo maneja OnSceneLoaded -> FadeInConEspera (escenas de juego)
+        // o directamente ocultando el panel (escena de menu).
     }
 
     private IEnumerator FadeOut(float duracion)

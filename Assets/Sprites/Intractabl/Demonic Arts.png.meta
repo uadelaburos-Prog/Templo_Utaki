@@ -1,0 +1,455 @@
+fileFormatVersion: 2
+guid: 86ccd015a21e8304eada509eb6ff523d
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 1136237931072590732
+    second: Demonic Arts_0
+  - first:
+      213: -4090256555947093928
+    second: Demonic Arts_1
+  - first:
+      213: 1290509941137318745
+    second: Demonic Arts_2
+  - first:
+      213: -8730589151761311813
+    second: Demonic Arts_3
+  - first:
+      213: -4283939659237808818
+    second: Demonic Arts_4
+  - first:
+      213: 8510692283126126164
+    second: Demonic Arts_5
+  - first:
+      213: 6323917616582652740
+    second: Demonic Arts_6
+  - first:
+      213: -5435174313878033921
+    second: Demonic Arts_7
+  - first:
+      213: 6982882589011003004
+    second: Demonic Arts_8
+  - first:
+      213: -4756460440308927874
+    second: Demonic Arts_9
+  - first:
+      213: -1951030508880955254
+    second: Demonic Arts_10
+  - first:
+      213: -4744768077004705089
+    second: Demonic Arts_11
+  - first:
+      213: -1275031559524195605
+    second: Demonic Arts_12
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Demonic Arts_0
+      rect:
+        serializedVersion: 2
+        x: 667
+        y: 326
+        width: 460
+        height: 368
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c8318e5d06ab4cf00800000000000000
+      internalID: 1136237931072590732
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_1
+      rect:
+        serializedVersion: 2
+        x: 720
+        y: 483
+        width: 354
+        height: 335
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8509f8e555d7c37c0800000000000000
+      internalID: -4090256555947093928
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_2
+      rect:
+        serializedVersion: 2
+        x: 518
+        y: 181
+        width: 117
+        height: 123
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 953a99c34ffc8e110800000000000000
+      internalID: 1290509941137318745
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_3
+      rect:
+        serializedVersion: 2
+        x: 643
+        y: 183
+        width: 80
+        height: 110
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb753615c67b6d680800000000000000
+      internalID: -8730589151761311813
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_4
+      rect:
+        serializedVersion: 2
+        x: 732
+        y: 183
+        width: 139
+        height: 110
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e452ce3c3936c84c0800000000000000
+      internalID: -4283939659237808818
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_5
+      rect:
+        serializedVersion: 2
+        x: 875
+        y: 181
+        width: 113
+        height: 115
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 45614683a8d0c1670800000000000000
+      internalID: 8510692283126126164
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_6
+      rect:
+        serializedVersion: 2
+        x: 995
+        y: 183
+        width: 111
+        height: 110
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4437e35119113c750800000000000000
+      internalID: 6323917616582652740
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_7
+      rect:
+        serializedVersion: 2
+        x: 1117
+        y: 183
+        width: 44
+        height: 110
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ff9e8f022c16294b0800000000000000
+      internalID: -5435174313878033921
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_8
+      rect:
+        serializedVersion: 2
+        x: 1171
+        y: 179
+        width: 101
+        height: 124
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c76c242c7be28e060800000000000000
+      internalID: 6982882589011003004
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_9
+      rect:
+        serializedVersion: 2
+        x: 726
+        y: 88
+        width: 83
+        height: 71
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e72303b2e68adfdb0800000000000000
+      internalID: -4756460440308927874
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_10
+      rect:
+        serializedVersion: 2
+        x: 826
+        y: 87
+        width: 74
+        height: 72
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a887334d61c8ce4e0800000000000000
+      internalID: -1951030508880955254
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_11
+      rect:
+        serializedVersion: 2
+        x: 912
+        y: 88
+        width: 66
+        height: 70
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fb27584a292372eb0800000000000000
+      internalID: -4744768077004705089
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Demonic Arts_12
+      rect:
+        serializedVersion: 2
+        x: 998
+        y: 87
+        width: 55
+        height: 73
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: be2e5215d8d2e4ee0800000000000000
+      internalID: -1275031559524195605
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      Demonic Arts_0: 1136237931072590732
+      Demonic Arts_1: -4090256555947093928
+      Demonic Arts_10: -1951030508880955254
+      Demonic Arts_11: -4744768077004705089
+      Demonic Arts_12: -1275031559524195605
+      Demonic Arts_2: 1290509941137318745
+      Demonic Arts_3: -8730589151761311813
+      Demonic Arts_4: -4283939659237808818
+      Demonic Arts_5: 8510692283126126164
+      Demonic Arts_6: 6323917616582652740
+      Demonic Arts_7: -5435174313878033921
+      Demonic Arts_8: 6982882589011003004
+      Demonic Arts_9: -4756460440308927874
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

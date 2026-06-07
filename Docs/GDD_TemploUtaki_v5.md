@@ -8,7 +8,7 @@
 
 | **Estudio** | **Demonic Arts Company** |
 | --- | --- |
-| Versión | v4.0 — Mayo 2026 |
+| Versión | v5.3 — Junio 2026  ·  SpectralPatrollerAI  ·  Checkpoints  ·  BreakableAnchor  ·  MenuManager  ·  SpotlightOverlay |
 | Motor | Unity 6000.0.30f1 — URP 2D |
 | Plataforma | PC (escalable a consolas) |
 | Duración estimada | 20–30 minutos |
@@ -86,7 +86,7 @@ El templo no es un escenario decorativo: es un sistema de obstáculos, guardiane
 
 **—  **Combate Ambiental: el jugador no ataca. Usa el entorno — trampas, plataformas, proyectiles enemigos — para eliminar adversarios tácticamente. La evasión siempre es una opción válida.
 
-**—  **Accesibilidad: desafío moderado y progresivo. La muerte es rápida e indolora — un reinicio inmediato, no una punición. El juego invita a intentar de nuevo.
+**—  **Accesibilidad: desafío moderado y progresivo. La muerte es rápida e indolora — reinicio en segundos, no una punición. Los niveles incluyen checkpoints que permiten reanudar desde un punto intermedio.
 
 **—  **Concisión: 20–30 minutos de juego puro, sin relleno ni backtracking. Cada segundo exige al jugador que use el gancho.
 
@@ -312,10 +312,30 @@ El gancho interactúa con dos categorías distintas de objetos del nivel, difere
 | Pinchos | Zona fija. Sin movimiento. SpikeMode.Estatico — siempre activos, cualquier contacto causa reinicio independientemente del estado interno. | Rojo intenso, estático. | Contacto = reinicio. |
 | Fuego | Zona de área. Estático. | Animación de llama + partículas. | Contacto = reinicio. |
 | Foso de Vacío | Caída fuera del nivel. Muerte por vacío: reinicio inmediato sin animación dramática. | Oscuridad visible. Sin borde marcado. | Caída = reinicio. |
-| Pinchos Retráctiles | Ciclo fijo configurable (ej: 1.5s activo / 1.5s retráctil). SpikeMode.Retractil — solo activos en estado Desplegado. | Animación de salida + color rojo. Ciclo constante y predecible. | Contacto en estado Desplegado = reinicio. |
+| Llamarada Retráctil | Ciclo activo/inactivo configurable. Dispara una columna de fuego hacia arriba, más alta que los pinchos retráctiles. Comportamiento idéntico a los pinchos retráctiles en lógica de ciclo. | Brillo anaranjado en el suelo antes de activarse + sonido de ignición como advertencia. | Contacto activo = reinicio. Mata al Espectral. El único hazard cíclico que lo elimina. |
+| Pinchos Retráctiles | Ciclo fijo configurable (ej: 1.5s activo / 1.5s retráctil). SpikeMode.Retractil — solo activos en estado Desplegado. Dirección configurable: Arriba / Abajo / Izquierda / Derecha. Grupos soportan tres modos de ciclo: Sincronizado (todos juntos), Desfasado (distribuido automáticamente) y Secuencial (activación en orden con delay entre spikes). | Animación de salida + color rojo. Ciclo constante y predecible. Flecha direccional en Gizmos (Editor). | Contacto en estado Desplegado = reinicio. |
 
 | *Regla universal: todos los obstáculos deben ser visibles antes de que el jugador pueda impactarlos. Ningún obstáculo mata por sorpresa en la primera pasada de un nivel correctamente diseñado.* |
 | --- |
+
+**Llamarada Retráctil — Detalle de diseño**
+
+La Llamarada Retráctil es el hazard más versátil del juego por una razón: es el único hazard cíclico capaz de eliminar al Guerrero Espectral. Esto abre situaciones de diseño únicas donde el jugador puede atraer al Espectral hacia una Llamarada durante su órbita o su dash, o posicionarse al otro lado de ella cuando el Espectral inicia el Windup.
+
+**—  **Física del fuego: la columna sube verticalmente desde el suelo. No tiene componente horizontal.
+
+**—  **Altura: significativamente mayor que los pinchos retráctiles — el jugador no puede saltarla en el momento activo.
+
+**—  **Ciclo: igual al sistema de pinchos retráctiles — mismos modos de grupo (Sincronizado, Desfasado, Secuencial) y configuración de timers desde el Inspector.
+
+**—  **Señalización: el brillo previo en el suelo da al jugador una ventana de lectura antes del disparo. El ciclo es siempre predecible.
+
+**—  **Interacción con el Espectral: al cruzar la columna activa, el Espectral muere instantáneamente — misma lógica que la Zona de Fuego estática, pero en forma cíclica y colocable con precisión en niveles de plataformas.
+
+| *ℹ  Diferencia clave: la Zona de Fuego es una barrera ambiental permanente. La Llamarada Retráctil es una trampa de timing — hay ventanas seguras para cruzar. Esta diferencia es fundamental para diseñar secciones donde el jugador deba cruzar al mismo tiempo que atrae al Espectral.* |
+| --- |
+
+Parámetros técnicos (ciclo, altura, script) en (*ver Sección 15.3*).
 
 **4.3 Trampas Ambientales con Activador**
 
@@ -360,11 +380,17 @@ El punto de anclaje no es un objeto específico: es una propiedad asignable a cu
 
 **—  **Asignable a: plataformas móviles, objetos en movimiento.
 
-**Anclaje Destructible**
+**Anclaje Destructible (BreakableAnchor)**
 
-**—  **Soporta 1–2 usos del gancho. Al agotarse, el objeto colapsa.
+**—  **Se activa al engancharse: el gancho dispara la secuencia de rotura inmediatamente al conectar.
 
-**—  **Puede abrir un pasaje o desencadenar movimiento. Señalización por apariencia del material.
+**—  **Tres fases de advertencia visual (igual que la Plataforma Frágil) antes del colapso final, con la cuerda retrayéndose automáticamente al romperse.
+
+**—  **Modo configurable desde el Inspector: `permanentBreak = true` — el objeto se destruye permanentemente al romperse; `permanentBreak = false` — regenera tras un `regenDelay` configurable.
+
+**—  **Si el jugador se engancha mientras ya está en proceso de rotura, el gancho se registra pero no reinicia la corrutina.
+
+**—  **Señalización por apariencia del material: grietas visibles o textura desgastada indican que el anclaje es destructible.
 
 **Anclaje Reactivo**
 
@@ -386,7 +412,7 @@ El punto de anclaje no es un objeto específico: es una propiedad asignable a cu
 
 **Activados Exclusivamente por el Gancho (capa Hookeable)**
 
-**—  **Pared Reactiva: al enganchar una argolla en una pared débil y tirar, la pared cae abriendo un pasaje. El resultado es predecible visualmente antes del intento.
+**—  **Pared Reactiva: al enganchar una argolla en una pared débil y tirar, la pared cae con animación de rotación abriendo un pasaje. Al terminar la caída, la pared queda como superficie sólida permanente sobre la que el jugador puede caminar — funciona como puente. El resultado (pasaje + plataforma) es predecible visualmente antes del intento.
 
 **—  **Plataforma de Tracción: al enganchar y mantener tensión, la plataforma se desplaza hacia el jugador.
 
@@ -405,50 +431,51 @@ Los enemigos de Templo Utaki son predecibles por diseño. El jugador puede apren
 
 El jugador no tiene ataque. Sin embargo, puede eliminar enemigos de forma táctica usando el entorno: trampas, obstáculos y la física del nivel actúan como herramientas de combate indirecto. La eliminación ambiental es opcional — siempre existe una ruta de evasión — pero recompensa la lectura del espacio y la planificación.
 
-Sistema de daño unificado: cualquier contacto con un enemigo, proyectil o trampa causa reinicio inmediato del nivel. No hay sistema de vidas ni barra de salud. El sistema distingue dos tipos de muerte: muerte por hazard (pinchos, fuego, contacto con enemigo) y muerte por vacío (caída fuera del nivel). La muerte por hazard activa una secuencia dramática: el jugador pierde el control instantáneamente, la pantalla se oscurece con el SpotlightOverlay (efecto de reflector centrado en el jugador), el juego se pausa y se reproduce la animación de muerte en tiempo real (UnscaledTime). La escena se recarga al finalizar la animación. La muerte por vacío es reinicio inmediato sin animación ni dramatismo — el jugador vuelve al nivel en menos de 2 segundos.
+Sistema de daño unificado: cualquier contacto con un enemigo, proyectil o trampa reinicia el nivel. La muerte por trampa activa una secuencia dramática breve (SpotlightOverlay + pausa + animación Death en UnscaledTime) antes del reinicio. La muerte por caída al vacío es inmediata. Si hay un checkpoint activo, el jugador reaparece desde ese punto.
 
 **5.2 Enemigo Tipo 1A: El Guerrero Espectral**
 
 **Descripción**
 
-Espíritu guerrero de un antiguo guardián del templo. Semitransparente, con tocado de plumas fantasmales y pintura de guerra que emite un brillo tenue. Su naturaleza espectral le permite atravesar casi todas las superficies del nivel — paredes, suelo, plataformas. Las únicas superficies que lo detienen son las paredes con ornamentación dorada o rúnica, claramente distinguibles por su brillo.
+Espíritu guerrero de un antiguo guardián del templo. Semitransparente, con tocado de plumas fantasmales y pintura de guerra que emite un brillo tenue. Su naturaleza espectral le permite atravesar casi todas las superficies del nivel — paredes, suelo, plataformas. Las únicas superficies que lo detienen son las paredes con ornamentación dorada o rúnica.
 
-El Guerrero Espectral no puede ser eliminado por trampas físicas. Solo el fuego lo destruye. Para un jugador que no quiera enfrentarlo, la evasión es siempre posible dado que el gancho permite moverse en tres dimensiones mientras el Espectral se mueve linealmente.
+**Comportamiento general**
 
-**Comportamiento — Traversal**
-
-**—  **Atraviesa paredes, suelo, plataformas y techos normales.
-
-**—  **Es bloqueado por superficies con ornamentación dorada/rúnica (capa SpectralWall). El jugador puede identificarlas a primera vista.
-
-**—  **Su área de patrulla se define por dos puntos en el espacio (configurables en el Inspector), no por geometría del nivel. El Espectral invierte dirección al alcanzar cada punto.
-
-**—  **No es afectado por pinchos, roca cayente, fosos de vacío ni plataformas frágiles.
-
-**—  **Muere al contacto con fuego. La eliminación es instantánea.
+El Espectral no persigue al jugador en línea recta. En lugar de eso, orbita alrededor del jugador describiendo una elipse dinámica, evaluando constantemente el momento de atacar. Cuando el jugador permanece quieto durante un intervalo sostenido, el Espectral telegrafía un dash con un parpadeo blanco breve y se lanza en línea recta. Si impacta una pared rúnica durante el dash, se detiene inmediatamente.
 
 **Máquina de Estados**
 
 *Figura 2 — Máquina de estados del Guerrero Espectral*
 
-| **Estado** | **Transición** | **Qué hace** |
+| **Estado** | **Cuándo activa** | **Qué hace el Espectral** |
 | --- | --- | --- |
-| IDLE | Llega al extremo de ruta → invierte dirección | Detenido en punto de patrulla. Duración: 0.5–1s. |
-| PATRULLA | Detecta jugador → ALERTA | Se mueve a 2 u/s en línea recta. Al llegar al extremo definido de su ruta, invierte dirección y vuelve por el mismo trayecto. Chequea rango de detección cada frame. |
-| ALERTA | 0.3s → PERSECUCIÓN | Detectó al jugador. Muestra «!». Pausa 0.3s. |
-| PERSECUCIÓN | Sale de radio ×1.5 → REGRESO | Se mueve a 4 u/s en línea recta hacia el jugador atravesando todo. Sin respetar geometría. |
-| REGRESO | Llega al punto → PATRULLA | Vuelve al punto de patrulla más cercano a 3 u/s. |
-| MUERTO | — | Contacto con fuego. Animación de desintegración. Suelta la llave si la portaba. |
+| PATRULLA | Estado inicial / tras perder al jugador | Recorre su ruta entre dos puntos predefinidos. Si detecta al jugador, entra en Orbita. |
+| IDLE | Al llegar al extremo de su ruta | Pausa breve antes de invertir dirección. |
+| ORBITA | Jugador detectado | Describe una elipse dinámica alrededor del jugador, sin atacar. Espera que el jugador se detenga. |
+| WINDUP | Jugador quieto un tiempo sostenido | Telegraph de ataque: retrocede levemente y parpadea en blanco. Señal visible para el jugador. |
+| DASH | Tras completar el Windup | Se lanza en línea recta a alta velocidad hacia donde estaba el jugador al inicio del Windup. Un rastro visual marca su trayectoria. |
+| RECOVER | Tras completar el Dash o impactar una pared rúnica | Pausa breve antes de volver a orbitar o retirarse. |
+| REGRESO | Jugador fuera de rango | Vuelve a su punto de patrulla. |
+| MUERTO | Contacto con fuego | Desintegración inmediata. Suelta la llave si la portaba. |
+
+| *ℹ  El objetivo del Windup (parpadeo blanco) es dar al jugador una ventana clara para moverse. Quien se mueva constantemente nunca verá un Dash. El desafío está en gestionar el movimiento mientras navega el nivel.* |
+| --- |
+
+**Traversal**
+
+El Espectral flota — no le afecta la gravedad y atraviesa toda la geometría del nivel. Solo las paredes con ornamentación dorada o rúnica (capa SpectralWall) lo detienen. El jugador puede identificarlas a primera vista.
 
 **Eliminación Ambiental**
 
-El Guerrero Espectral solo muere por fuego. El jugador puede usar esto tácticamente: atraerlo hacia una zona de fuego del nivel mientras el espectral lo persigue en línea recta. Por su naturaleza de atravesar todo, no puede ser engañado con obstáculos físicos, pero su trayectoria rectilínea es predecible y explotable.
+**—  **El contacto con cualquier zona de fuego (estática o Llamarada Retráctil) mata al Espectral instantáneamente. Es el único método de eliminación.
 
-**—  **Contacto con zona de fuego = muerte instantánea del Espectral.
+**—  **El jugador puede posicionarse al otro lado de una zona de fuego y dejar que el Espectral cruce durante el dash o la órbita.
 
-**—  **El jugador debe posicionarse al otro lado del fuego y dejar que el Espectral cruce.
+**—  **Las paredes rúnicas pueden usarse para interrumpir el dash y reposicionarse.
 
 **—  **Si portaba una llave, esta cae al suelo con física en el punto de muerte.
+
+Parámetros técnicos completos (velocidades, radios, timers) en (*ver Sección 15.4*).
 
 **Ficha de Arte**
 
@@ -456,13 +483,12 @@ El Guerrero Espectral solo muere por fuego. El jugador puede usar esto tácticam
 | --- | --- |
 | Tamaño sprite | 16×24 px. Silueta de guerrero con tocado ornamentado. |
 | Paleta | Azul espectral semitransparente, detalles de plumas y pintura de guerra brillantes. |
-| Efecto visual | Semitransparencia. Ligero rastro al moverse. |
-| Animación: idle | 2–4 frames. Flotación sutil. Loop. |
-| Animación: patrulla | 6–8 frames. Desplazamiento etéreo sin ciclo de piernas. |
-| Animación: alerta | 2 frames. Pausa brusca, brillo intenso. |
-| Animación: persecución | 6–8 frames. Movimiento acelerado, mayor brillo. |
+| Efectos visuales | Semitransparencia. Rastro de copias fantasma durante el dash. Parpadeo blanco en Windup. |
+| Animación: patrulla / órbita | 6–8 frames. Flotación sutil y desplazamiento etéreo. Loop. |
+| Animación: windup | 2–3 frames. Retroceso con parpadeo blanco rítmico. |
+| Animación: dash | 4–6 frames. Alta velocidad con trail de copias. |
 | Animación: muerte | 6–8 frames. Desintegración en partículas de fuego. |
-| Ícono de alerta | «!» amarillo sobre la cabeza. 8×8 px. |
+| Ícono de alerta | «!» amarillo sobre la cabeza. 8×8 px. Visible al detectar al jugador. |
 
 | *[ INSERTAR IMAGEN ]  Concept art + spritesheet del Guerrero Espectral* |
 | --- |
@@ -620,7 +646,7 @@ El lanzamiento de la llave sigue exactamente el mismo sistema de carga que el ga
 
 **—  **La relación llave-puerta es 1 a 1, configurable desde el Inspector.
 
-**—  **Al acercarse sosteniendo la llave vinculada, la puerta se abre automáticamente.
+**—  **Al acercarse sosteniendo la llave vinculada, la puerta se abre automáticamente. La apertura tiene una animación de 5 frames: el sprite sube hacia arriba progresivamente hasta desaparecer. El collider se desactiva de inmediato al comenzar la animación.
 
 **—  **Una puerta abierta permanece abierta durante el resto de la sesión del nivel.
 
@@ -896,12 +922,26 @@ Distribuidos a lo largo de cada nivel, los cristales son opcionales. No afectan 
 
 | **Estado** | **Descripción** |
 | --- | --- |
-| Menú Principal | A diseñar. Mínimo: Jugar, Opciones, Salir. Estética coherente con el juego. |
+| Menú Principal | Jugar, Opciones, Salir. Transición suave con fade antes de cargar o salir. MenuManager autónomo — sin dependencia de GameLoopManager. |
 | En Juego | HUD mínimo activo. El juego arranca desde el Nivel 1. |
 | Pausa | Tiempo congelado. Opciones: Reanudar, Reintentar, Opciones, Menú Principal. ESC reanuda directamente. |
-| Muerte del jugador | Sin pantalla de game over. Dos variantes: muerte por hazard activa animación dramática con SpotlightOverlay y pausa del juego; muerte por vacío es reinicio inmediato sin animación. El jugador vuelve al nivel en menos de 2 segundos. |
+| Muerte — por trampa | Secuencia dramática breve (SpotlightOverlay + pausa corta) antes del reinicio automático. |
+| Muerte — por caída al vacío | Reinicio automático inmediato, sin secuencia. Si hay checkpoint activo, reaparece desde ese punto. |
 | Fin de Nivel | Pantalla breve con cristales obtenidos / total y tiempo en nivel. Continuar al siguiente. |
 | Victoria | Pantalla de créditos con puntuación total y contador de muertes. |
+
+**9.4 Sistema de Checkpoints**
+
+Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al entrar en un checkpoint, el juego guarda la posición del jugador en ese momento. Si el jugador muere después, reaparece desde ese punto en lugar de desde el inicio del nivel.
+
+| *ℹ  Principio de diseño: el checkpoint suaviza la dificultad en niveles largos sin eliminar el desafío — el jugador aún pierde los cristales recogidos desde el checkpoint. Reiniciar explícitamente el nivel (tecla R) borra el checkpoint activo.* |
+| --- |
+
+**—  **Solo hay un checkpoint activo por sesión de nivel. Activar uno nuevo sobreescribe el anterior.
+
+**—  **Al morir, el nivel se recarga y el jugador aparece en la posición del checkpoint. Los cristales se restauran al valor que tenían cuando se activó.
+
+**—  **Al avanzar al siguiente nivel o reiniciar manualmente, el checkpoint se borra. El siguiente intento arranca desde el inicio.
 
 **PARTE II**
 
@@ -941,19 +981,31 @@ Distribuidos a lo largo de cada nivel, los cristales son opcionales. No afectan 
 
 **11.1 Scripts Principales**
 
-| **Script** | **Responsabilidad** |
-| --- | --- |
-| PlayerMovement.cs | Movimiento horizontal, salto, gravedad variable, coyote time, input buffer, detección de suelo. |
-| GrappleScript.cs | Ciclo de estados del gancho, sistema de carga, ajuste de longitud de soga (W/S), raycast, snap automático, LineRenderer, retracción de objetos. |
-| SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: idle, patrulla, alerta, persecución, regreso, muerte por fuego. |
-| MummyPatrollerAI.cs | Máquina de estados de la Momia del Templo: idle, patrulla, alerta, persecución, regreso, muerte por trampas ambientales. |
-| LauncherAI.cs | Timer de disparo, instanciación de proyectil, dirección fija. |
-| Projectile.cs | Movimiento del proyectil, detección de impacto (jugador y Momia), destrucción por tiempo o borde. |
-| GolemBoss.cs | Máquina de estados del Jefe Final, fases, patrones de ataque, condición de victoria. |
-| KeyItem.cs | Física de la llave, recolección por proximidad o gancho, lanzamiento con sistema de carga, respawn al caer al void. |
-| KeyDoor.cs | Vínculo llave-puerta, detección de proximidad del jugador con llave, apertura de puerta. |
-| LevelManager.cs | Reemplazado por GameLoopManager.cs. Gestión de nivel: inicio, fin, reinicio, puntuación, cristales. Sistema de muerte (PlayerDied): distingue muerte por hazard (RutinaMuerteDramatica) y por vacío (RutinaReinicio). Flag isDying para prevenir múltiples muertes simultáneas. DontDestroyOnLoad. Hijo directo: SpotlightCanvas. |
-| CrystalPickup.cs | Trigger de recolección, comunicación con GameLoopManager. |
+| **Script** | **Responsabilidad** | **Estado** |
+| --- | --- | --- |
+| PlayerMovement.cs | Movimiento horizontal, salto, gravedad variable (rise/fall/swing scale), coyote time, jump cut, air accel/decel, detección de suelo (rb.GetContacts con groundNormalThreshold), SFX salto y aterrizaje. | ✅ Implementado |
+| GrappleScript.cs | Ciclo de estados del gancho, sistema de carga (chargeTimer), ajuste de longitud de soga (W/S), raycast, snap automático, LineRenderer (Bezier), anclaje reactivo (ReactiveWall.OnHooked), retracción de objetos, highlight de superficies grappleables. Llama OnHooked() en BreakableAnchor al engancharse. | ✅ Implementado |
+| PatrollerAI.cs | Máquina de estados de la Momia: idle, patrulla, persecución, regreso. Ícono «!» con animación SmoothStep. SFX alerta. Muerte por contacto vía GameLoopManager. | ✅ Implementado |
+| MovingPlatform.cs | Plataforma móvil con herencia de velocidad al jugador. Movimiento vía Lerp lineal con rebote. | ✅ Implementado |
+| FragilePlatform.cs | Plataforma frágil: timer de rotura, 3 fases visuales (amarillo→naranja→rojo), regeneración, SFX crujido y rotura. | ✅ Implementado |
+| OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo. | ✅ Implementado |
+| SpikeHazard.cs | Pinchos estáticos y retráctiles. 3 estados: Retraído / Asomando (sin daño) / Desplegado. DireccionSalida enum (Arriba/Abajo/Izquierda/Derecha). SpikeGroup con ModoCiclo: Sincronizado / Desfasado / Secuencial (delayEntreSpikes=0.15s). | ✅ Implementado |
+| VoidScript.cs | Foso de vacío: trigger → PlayerDied(fromVoid:true). Reinicio inmediato sin SpotlightOverlay. | ✅ Implementado |
+| GameLoopManager.cs | Gestión de nivel: inicio, fin, reinicio, cristales, contador de muertes. Sistema de muerte: distingue hazard (RutinaMuerteDramatica con SpotlightOverlay + timeScale=0) y vacío (RutinaReinicio inmediata). Flag isDying previene muertes simultáneas. Sistema de checkpoints: GuardarCheckpoint(), AplicarSpawnCheckpoint(), LimpiarCheckpoint(). DontDestroyOnLoad. Hijo directo: SpotlightCanvas. Instanciar en Nivel 1. | ✅ Implementado |
+| AudioManager.cs | Singleton con DontDestroyOnLoad. SFX espaciales. Música con crossfade (SwapingVolume). Control de volumen vía AudioMixer. StopMusic() para transiciones de menú. | ✅ Implementado |
+| CamaraScript.cs | Seguimiento con Lerp, look-behind horizontal, look-down proporcional a velocidad de caída. SnapToPlayer() al respawnear desde checkpoint. | ✅ Implementado |
+| CrystalPickup.cs | Trigger de recolección, comunicación con GameLoopManager. | ✅ Implementado |
+| HazardFire.cs | Zona de fuego: mata Player (fromVoid=false) + llama SpectralPatrollerAI.Morir() y PatrollerAI.Morir(). | ✅ Implementado |
+| ReactiveWall.cs | Pared reactiva al gancho. Animación de rotación de caída. Al finalizar Derribo() pasa a RigidbodyType2D.Static — queda como puente sólido permanente. OnHooked/OnReleased. | ✅ Implementado |
+| SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: patrulla, órbita elíptica dinámica (3u ± 0.4u sinusoidal, 1.5 rad/s), windup con parpadeo blanco (0.35s), dash (18 u/s, 8u), recover. AfterimageTrail durante dash. isTrigger forzado en Awake. Muerte por HazardFire (tag SpectralEnemy). | ✅ Implementado |
+| CheckpointZone.cs | Objeto en escena (trigger one-shot). Al entrar el jugador: llama GameLoopManager.GuardarCheckpoint(). Restaura estado visual del animator al recargar (tolerancia 0.1u). SFX de activación. | ✅ Implementado |
+| BreakableAnchor.cs | Superficie grappleable destructible. Se activa mediante OnHooked(GrappleScript) al engancharse. Tres fases de advertencia visual antes de la rotura. El gancho se retrae automáticamente al romperse. Parámetros: permanentBreak (bool), regenDelay (float, default 5s). | ✅ Implementado |
+| MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego(), Salir(), AbrirOpciones(), CerrarOpciones(). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime) + AudioManager.StopMusic(). | ✅ Implementado |
+| KeyDoor.cs | Vínculo llave-puerta. Detección de proximidad del jugador con llave. Animación de apertura: 5 frames con desplazamiento ascendente (altoPuerta / (frames-1) por frame). Collider desactivado al comenzar la animación. | 📋 Planeado |
+| KeyItem.cs | Física de la llave, recolección por proximidad o gancho, lanzamiento con sistema de carga, respawn al caer al void. | 📋 Planeado |
+| LauncherAI.cs | Timer de disparo, instanciación de proyectil, dirección fija. | 📋 Planeado |
+| Projectile.cs | Movimiento del proyectil, detección de impacto (jugador y Momia), destrucción por tiempo o borde. | 📋 Planeado |
+| GolemBoss.cs | Máquina de estados del Jefe Final, fases, patrones de ataque, condición de victoria. | 📋 Planeado |
 
 **11.2 Sistema de Capas y Tags (Unity)**
 
@@ -986,15 +1038,15 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 
 | **Parámetro** | **Valor actual** | **Notas** |
 | --- | --- | --- |
-| Velocidad de carrera | 8–10 u/s | SerializeField en PlayerMovement.cs |
+| Velocidad de carrera | 9 u/s | SerializeField en PlayerMovement.cs |
 | Velocidad de salto | 12 u/s | SerializeField en PlayerMovement.cs |
 | Coyote time | 0.12s | SerializeField en PlayerMovement.cs |
 | Input buffer | 0.15s | SerializeField en PlayerMovement.cs |
 | Tiempo mín. de carga | 0.1s | SerializeField en GrappleScript.cs |
-| Tiempo máx. de carga | 1.0s | SerializeField en GrappleScript.cs |
-| Alcance mínimo | 5 u | SerializeField en GrappleScript.cs |
-| Alcance máximo | 15 u | SerializeField en GrappleScript.cs |
-| Radio de snap | 1.5 u (proporcional a carga) | SerializeField en GrappleScript.cs |
+| Tiempo máx. de carga | 1.5s | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 1.0s) |
+| Alcance mínimo | 3 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 5u) |
+| Alcance máximo | 10 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 15u) |
+| Radio de snap | 0.4 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 1.5u) |
 | Cooldown de fallo | 0.3s | SerializeField en GrappleScript.cs |
 | Velocidad proyectil Lanzador | 8 u/s | SerializeField en LauncherAI.cs |
 | Cadencia de disparo | 2–3s | SerializeField en LauncherAI.cs |
@@ -1018,7 +1070,7 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 
 **—  **Control de versiones: Git — GitHub
 
-**—  **Gestión de tareas: Google Sheets (Backlog v3)
+**—  **Gestión de tareas: Jira Cloud
 
 **—  **Documentación: Google Drive — carpeta 'Produccion de Videojuegos'
 
@@ -1110,17 +1162,17 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-027** | **Plataforma one-way** | Atravesable desde abajo. Soporta peso desde arriba. Gancho desde arriba solamente. | Entorno |  |
 | **F-028** | **Plataforma de tracción** | Se desplaza hacia el jugador mientras el gancho está en tensión. | Entorno | *Al soltar, se detiene o retorna según config.* |
 | **F-029** | **Pinchos estáticos** | Zona fija de muerte instantánea. | Entorno | *Layer Hazard.* |
-| **F-030** | **Pinchos retráctiles** | Ciclo fijo configurable. Predecibles. | Entorno | *Nivel 1 los introduce.* |
+| **F-030** | **Pinchos retráctiles** | Ciclo fijo configurable. Predecibles. Dirección configurable: Arriba / Abajo / Izquierda / Derecha. Grupos con tres modos: Sincronizado, Desfasado, Secuencial. | Entorno | *Nivel 1 los introduce. DireccionSalida enum en SpikeHazard.cs. ModoCiclo en SpikeGroup.cs.* |
 | **F-031** | **Fuego** | Zona de área estática. Muerte al contacto. | Entorno |  |
 | **F-032** | **Foso de vacío** | Caída fuera del nivel. Oscuridad comunica el peligro. | Entorno | *Trigger en zona baja del nivel.* |
 | **F-033** | **Roca cayente** | Trampa activada por placa. Cae vertical, luego horizontal hasta pared. | Entorno | *Sombra proyectada + sonido de advertencia.* |
 | **F-034** | **Placa de presión** | Activador en el suelo. Dispara trampa vinculada una vez por pisada. | Entorno | *Sistema extensible: activador → efecto.* |
 | **F-035** | **Palanca / Switch** | Alterna estado ON/OFF de objeto vinculado. | Entorno |  |
-| **F-036** | **Pared reactiva al gancho** | Al enganchar argolla y tirar, la pared cae abriendo un pasaje. | Entorno | *Nivel 1 lo introduce.* |
+| **F-036** | **Pared reactiva al gancho** | Al enganchar argolla y tirar, la pared cae con animación de rotación abriendo un pasaje. Al terminar la caída queda como superficie sólida permanente (puente caminable). | Entorno | *Nivel 1 lo introduce. ReactiveWall.cs — pasa a RigidbodyType2D.Static al finalizar Derribo().* |
 | **F-037** | **Viga destructible** | El gancho la rompe en 1–2 usos. | Entorno |  |
 | **F-038** | **Anclaje fijo** | Estático. Distancia constante. | Entorno | *Asignable a paredes, techos, vigas, columnas.* |
 | **F-039** | **Anclaje móvil** | Se mueve. El jugador es arrastrado con él. | Entorno |  |
-| **F-040** | **Anclaje destructible** | 1–2 usos. Al agotarse, colapsa. | Entorno | *Puede abrir pasajes.* |
+| **F-040** | **Anclaje destructible (BreakableAnchor)** | Se activa al engancharse. Tres fases de advertencia visual. Gancho se retrae automáticamente al colapsar. Configurable: permanentBreak o regeneración con regenDelay. | Entorno | *BreakableAnchor.cs. GrappleScript.cs llama OnHooked() en SnapAndAttach().* |
 | **F-041** | **Anclaje reactivo** | Al tirar, activa un efecto en el objeto. | Entorno |  |
 | **F-042** | **Puerta de salida** | Trigger de fin de nivel. Se abre al llegar el jugador. | Entorno | *Comunica con LevelManager.* |
 | **▌ ENEMIGOS** |
@@ -1144,7 +1196,7 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-058** | **Contador HUD de cristales** | Esquina superior: cristales recogidos / total. Siempre visible. | Coleccionables |  |
 | **F-059** | **Resumen fin de nivel** | Pantalla breve: cristales obtenidos / total y tiempo. | Coleccionables |  |
 | **▌ UI Y ESTADOS DEL JUEGO** |
-| **F-060** | **Menú Principal** | Mínimo: Jugar, Opciones, Salir. Estética coherente con el juego. | UI |  |
+| **F-060** | **Menú Principal** | Jugar, Opciones, Salir. Fade-out antes de cargar escena o salir. Música se detiene en transición. MenuManager autónomo. | UI | *MenuManager.cs. CanvasGroup fade 0.4s (unscaledDeltaTime). AudioManager.StopMusic().* |
 | **F-061** | **Pausa** | Tiempo congelado. Reanudar, Reintentar, Opciones, Menú Principal. ESC reanuda directo. | UI | *Sin penalización por pausar.* |
 | **F-062** | **Pantalla de fin de nivel** | Cristales y tiempo al completar. Continuar al siguiente. | UI |  |
 | **F-063** | **Pantalla de victoria** | Créditos con puntuación total y contador de muertes. | UI | *Fade-out dorado en Nivel 6.* |
@@ -1168,6 +1220,22 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-080** | **Música — Jefe Final** | Pieza diferenciada. Más rítmica, mayor intensidad. | Audio |  |
 
 **Changelog del Registro**
+
+**Sesión 11***   Jun 2026*
+
+**→  **BreakableAnchor implementado (F-040 actualizado): anclaje destructible activado por el gancho, tres fases de advertencia, retracción automática, opción permanentBreak/regeneración.
+
+**→  **ReactiveWall actualizado (F-036): la pared al terminar la caída queda como puente sólido permanente (RigidbodyType2D.Static).
+
+**→  **Pinchos retráctiles actualizados (F-030): dirección configurable (DireccionSalida enum) y modo de ciclo de grupo (ModoCiclo: Sincronizado / Desfasado / Secuencial).
+
+**→  **KeyDoor actualizado: animación de apertura de 5 frames con desplazamiento ascendente. Collider desactivado inmediatamente.
+
+**→  **MenuManager implementado (F-060 actualizado): autónomo, fade-out 0.4s, StopMusic en todas las transiciones.
+
+**→  **SpectralPatrollerAI corregido: isTrigger forzado en Awake para garantizar detección de daño independiente de la config del Inspector.
+
+**→  **Sección 15.3 ampliada: parámetros de dirección y ModoCiclo de pinchos + parámetros de BreakableAnchor.
 
 **Prototipo***   Mar–Abr 2026*
 
@@ -1203,26 +1271,26 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 
 **15.  ****PARÁMETROS TÉCNICOS**
 
-Esta sección es la fuente de verdad para todos los valores numéricos del juego. Cualquier parámetro referenciado en Parte I se encuentra aquí con su valor actual y notas de implementación. Los valores son configurables desde el Inspector de Unity salvo indicación contraria.
+Esta sección es la fuente de verdad para todos los valores numéricos del juego. Los parámetros han sido sincronizados con el código del proyecto (build main, 2026-06) tras auditoría técnica — el código tiene prioridad sobre versiones anteriores del GDD para valores numéricos.
 
-**ℹ  ***Los valores marcados como 'Sujeto a cambio' son provisorios para el Prototipo y se ajustan durante Alpha según testing de feel.*
+**ℹ  ***Los valores marcados como 'Sujeto a cambio' son provisorios y se ajustan durante Alpha según testing de feel.*
 
 **15.1 Movimiento del Jugador**
 
-| **Parámetro** | **Valor** | **Script** | **Notas** |
+| **Parámetro** | **Valor implementado** | **Variable en código** | **Script** |
 | --- | --- | --- | --- |
-| Velocidad de carrera | 8–10 u/s | PlayerMovement.cs | Máximo alcanzado en 0.5s. |
-| Aceleración | 16–20 u/s² | PlayerMovement.cs | Al comenzar a correr. |
-| Desaceleración | -12 u/s² | PlayerMovement.cs | Al soltar tecla de movimiento. |
-| Velocidad salto vertical | 12 u/s | PlayerMovement.cs | Velocidad inicial. |
-| Altura salto base | 5–6 unidades | PlayerMovement.cs | Altura máxima alcanzada. |
-| Jump Cut | ×0.5 velocidad vertical | PlayerMovement.cs | Al soltar ESPACIO antes del apex. |
-| Coyote Time | 0.12s | PlayerMovement.cs | Ventana de salto tras salir de borde. Ausente en Prototipo. |
-| Input Buffer (salto) | 0.15s | PlayerMovement.cs | Tiempo que se recuerda el input de salto. Ausente en Prototipo. |
-| Hang Time | Pendiente de tuning | PlayerMovement.cs | Gravedad reducida en apex. Parámetro ajustable. |
-| Velocidad caída terminal | 12 u/s | PlayerMovement.cs | Velocidad máxima de caída. |
-| Gravedad global | ~30 u/s² | PlayerMovement.cs | Escalado de 9.81 m/s². |
-| Fricción de suelo | 0.6 | PlayerMovement.cs | Reduce velocidad horizontal al aterrizar. |
+| Velocidad de carrera | 9 u/s | moveSpeed = 9f | PlayerMovement.cs |
+| Aceleración en aire | 35 u/s² | airAccel = 35f | PlayerMovement.cs |
+| Desaceleración en aire | 20 u/s² | airDecel = 20f | PlayerMovement.cs |
+| Velocidad salto vertical | 12 u/s | jumpForce = 12f | PlayerMovement.cs |
+| Jump Cut multiplicador | ×0.5 | jumpCutMult = 0.5f | PlayerMovement.cs |
+| Coyote Time | 0.12s | coyoteTime = 0.12f | PlayerMovement.cs |
+| Escala de gravedad — subida | 2.0 | riseGravityScale = 2.0f | PlayerMovement.cs |
+| Escala de gravedad — caída | 3.5 | fallGravityScale = 3.5f | PlayerMovement.cs |
+| Velocidad máxima de caída | -20 u/s | maxFallSpeed = -20f | PlayerMovement.cs — ⚠️ Auditado |
+| Escala de gravedad — swing | 2.5 | swingGravityScale = 2.5f | PlayerMovement.cs |
+| Ground Normal Threshold | 0.7 (≈45°) | groundNormalThreshold = 0.7f | PlayerMovement.cs |
+| CapsuleCollider | 0.5×1 u | — | (prefab Inspector) |
 
 **15.2 Sistema del Gancho**
 
@@ -1248,6 +1316,11 @@ Esta sección es la fuente de verdad para todos los valores numéricos del juego
 | Frágil — tiempo de regeneración | 5s | Después de romperse completamente. |
 | Pinchos retráctiles — ciclo activo | 1.5s | Configurable por nivel. |
 | Pinchos retráctiles — ciclo inactivo | 1.5s | Configurable por nivel. |
+| Pinchos retráctiles — dirección | Arriba (default) | Enum DireccionSalida: Arriba / Abajo / Izquierda / Derecha. Inspector en SpikeHazard.cs. |
+| Pinchos retráctiles — modo de ciclo | Desfasado (default) | Enum ModoCiclo en SpikeGroup.cs: Sincronizado (todos juntos) / Desfasado (fase distribuida automáticamente) / Secuencial (con delay entre spikes). |
+| Pinchos retráctiles — delay secuencial | 0.15s | delayEntreSpikes en SpikeGroup.cs. Solo aplica en modo Secuencial. |
+| BreakableAnchor — fases de advertencia | 3 | Igual que Plataforma Frágil: cambio de color progresivo. |
+| BreakableAnchor — regeneración | 5s (default) | regenDelay configurable en Inspector. Sin efecto si permanentBreak = true. |
 
 **15.4 Enemigos**
 
@@ -1387,4 +1460,4 @@ Esta sección es la fuente de verdad para todos los valores numéricos del juego
 | Golem — Fase 2 | 48×64 px mín. | Crack visible, ojos brillantes | — |
 | Golem — muerte | 48×64 px mín. | — | 10–12f, colapso de piedra |
 
-*Demonic Arts Company  ·  Templo Utaki  ·  GDD v4.0  ·  Mayo 2026  ·  Confidencial — Uso interno del equipo*
+*Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.0  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*
