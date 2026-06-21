@@ -97,8 +97,8 @@ CapsuleCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.05607605, y: -0.07476735}
-  m_Size: {x: 1.01091, y: 2.4704242}
+  m_Offset: {x: 0.101882935, y: -0.21746111}
+  m_Size: {x: 0.91929626, y: 2.0962267}
   m_Direction: 0
 --- !u!212 &1572329064250460248
 SpriteRenderer:
@@ -194,18 +194,23 @@ MonoBehaviour:
   duracionIdle: 0.6
   radioDeteccion: 5
   radioAbandonar: 7
+  maskVisionBloqueo:
+    serializedVersion: 2
+    m_Bits: 512
   velocidadPersecucion: 3.5
+  alturaSaltoPersecucion: 1.2
+  zonaMuertaX: 0.3
   maskSuelo:
     serializedVersion: 2
     m_Bits: 16896
   edgeCheckOffsetX: 0.35
   edgeCheckOffsetY: 0.45
-  edgeCheckDistance: 5.57
+  edgeCheckDistance: 4.17
   fuerzaSalto: 7
   wallCheckDistance: 2
   wallCheckOriginY: -0.42
   jumpClearanceHeight: 0.8
   jumpCooldown: 0.6
-  deathAnimDuration: 1.2
+  deathAnimDuration: 0.5
   sfxAlerta: {fileID: 0}
   iconoAlerta: {fileID: 0}

@@ -458,7 +458,7 @@ MonoBehaviour:
     m_Bits: 192
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 2560
+    m_Bits: 512
   hookMask:
     serializedVersion: 2
     m_Bits: 8192
@@ -522,7 +522,7 @@ DistanceJoint2D:
   m_Anchor: {x: 0.3114667, y: -0.40115786}
   m_ConnectedAnchor: {x: -2.3013866, y: -3.18856}
   m_AutoConfigureDistance: 1
-  m_Distance: 238.85739
+  m_Distance: 90.39406
   m_MaxDistanceOnly: 1
 --- !u!95 &5571375290543817363
 Animator:

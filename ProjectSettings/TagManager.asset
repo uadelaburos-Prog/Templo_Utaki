@@ -11,6 +11,8 @@ TagManager:
   - MummyEnemy
   - Hazard
   - Fire
+  - SpectralEnemy
+  - ThrowingEnemy
   layers:
   - Default
   - TransparentFX

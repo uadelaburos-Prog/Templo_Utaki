@@ -173,16 +173,17 @@ MonoBehaviour:
   modo: 0
   desfase: 0
   tiempoInactivo: 2
-  tiempoCreciendo: 0.5
+  tiempoCreciendo: 1
   tiempoActivo: 1.5
   tiempoMenguando: 0.5
   frames:
-  - {fileID: -4232605178339881135, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  - {fileID: -3645967826366904726, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  - {fileID: 7193374702872855055, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  - {fileID: 1744167379261371898, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  - {fileID: 1732621731788272179, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  - {fileID: -2393040562646885447, guid: 4a68d127d8d6f764399517db64d724f8, type: 3}
-  tiempoEntreFramesCulmine: 0.4
+  - {fileID: -123668809562150163, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: -1906057056631273540, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: 164790999132585727, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: -7439284797008762147, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: -4532483980020809861, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: -5211542447093168656, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  - {fileID: 8241909526310509498, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
+  tiempoEntreFramesCulmine: 0.5
   alturaMaxima: 2
   anchoBase: 0.8

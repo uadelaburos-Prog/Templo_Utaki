@@ -151,12 +151,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5504aa0c87f12f44fbfea69c652c04a1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  orthoSize: 12.3
+  orthoSize: 9
   lookBehindDistance: 2
   lookBehindSpeed: 5
   camSpeed: 6
   lookDownDistance: 2
   lookDownSpeed: 5
+  verticalOffset: 2
+  terrainHeightRef: 1
+  terrainOffsetStrength: 5.39
+  terrainOffsetSpeed: 1
+  useBounds: 1
+  minX: -20
+  maxX: 20
+  minY: -10
+  maxY: 20
   maxFallSpeed: 20
   player: {fileID: 0}
 --- !u!50 &3072212215232489895

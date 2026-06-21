@@ -78,8 +78,8 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: -1985422689
   m_SortingLayer: 4
-  m_SortingOrder: 0
-  m_Sprite: {fileID: 4898770598671448810, guid: a7487ccd5e4ba52468375fe7f8529f50, type: 3}
+  m_SortingOrder: 2
+  m_Sprite: {fileID: 4898770598671448810, guid: a79115bcd2dfec2419797de6b18e070e, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -103,7 +103,7 @@ Rigidbody2D:
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
   m_Mass: 1
-  m_LinearDamping: 0
+  m_LinearDamping: 0.5
   m_AngularDamping: 0.05
   m_GravityScale: 1
   m_Material: {fileID: 0}
@@ -133,12 +133,12 @@ MonoBehaviour:
   playerMask:
     serializedVersion: 2
     m_Bits: 256
+  cooldownRecoger: 0.5
   velocidadMin: 4
   velocidadMax: 18
   maxCargaTiempo: 1.5
-  offsetPortada: {x: 0.5, y: 0.5}
-  rozamientoSuelo: 100
-  yVoidThreshold: -15
+  offsetPortada: {x: 1, y: -0.5}
+  rozamientoSuelo: 80
   barraRoot: {fileID: 0}
   barraImagen: {fileID: 0}
   sfxRecoger: {fileID: 0}
@@ -181,7 +181,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1.875}
+    oldSize: {x: 1, y: 1}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
