@@ -12,6 +12,8 @@ public class HazardFire : MonoBehaviour
     [Header("Modo")]
     [SerializeField] private ModoActivacion modo  = ModoActivacion.Ciclico;
     [SerializeField] private float          desfase = 0f;
+    [Tooltip("Solo en modo Activador: el fuego arranca encendido y permanece así hasta que un activador llame Desactivar().")]
+    [SerializeField] private bool           iniciarPrendido = false;
 
     [Header("Tiempos del ciclo")]
     [SerializeField] private float tiempoInactivo  = 2f;
@@ -46,24 +48,87 @@ public class HazardFire : MonoBehaviour
 
     private void Start()
     {
-        timerFase   = desfase;
-        col.enabled = false;
-        sr.enabled  = false;
-
         // Calcula donde esta el borde inferior del sprite mas grande (pivot puede no ser el bottom).
         if (frames != null && frames.Length > 0)
         {
             Sprite mayor = frames[frames.Length - 1];
-            float pivotYUnits = mayor.pivot.y / mayor.pixelsPerUnit;
-            baseHitbox = -pivotYUnits;
+            baseHitbox = -(mayor.pivot.y / mayor.pixelsPerUnit);
         }
 
-        ActualizarHitbox(0f);
+        if (modo == ModoActivacion.Ciclico && desfase > 0f)
+            AplicarDesfase();
+        else if (modo == ModoActivacion.Activador && iniciarPrendido)
+        {
+            // Arranca encendido; un activador externo lo apagará con Desactivar()
+            col.enabled = true;
+            sr.enabled  = true;
+            EntrarFase(Fase.Activo);
+        }
+        else
+        {
+            timerFase   = 0f;
+            col.enabled = false;
+            sr.enabled  = false;
+            ActualizarHitbox(0f);
+        }
+    }
+
+    // Ubica el fuego en la fase correcta del ciclo según el desfase configurado.
+    private void AplicarDesfase()
+    {
+        float ciclo = tiempoInactivo + tiempoCreciendo + tiempoActivo + tiempoMenguando;
+        float t     = desfase % ciclo;   // soporta desfases mayores a un ciclo completo
+
+        if (t < tiempoInactivo)
+        {
+            faseActual  = Fase.Inactivo;
+            timerFase   = t;
+            col.enabled = false;
+            sr.enabled  = false;
+            ActualizarHitbox(0f);
+            return;
+        }
+        t -= tiempoInactivo;
+
+        if (t < tiempoCreciendo)
+        {
+            faseActual  = Fase.Creciendo;
+            timerFase   = t;
+            float pct   = Mathf.Clamp01(t / tiempoCreciendo);
+            col.enabled = true;
+            sr.enabled  = true;
+            ActualizarHitbox(pct);
+            MostrarFrame(pct);
+            return;
+        }
+        t -= tiempoCreciendo;
+
+        if (t < tiempoActivo)
+        {
+            faseActual    = Fase.Activo;
+            timerFase     = t;
+            timerCulmine  = 0f;
+            culmineToggle = false;
+            col.enabled   = true;
+            sr.enabled    = true;
+            ActualizarHitbox(1f);
+            MostrarFrameCulmine(false);
+            return;
+        }
+        t -= tiempoActivo;
+
+        faseActual  = Fase.Menguando;
+        timerFase   = t;
+        float mpct  = 1f - Mathf.Clamp01(t / tiempoMenguando);
+        col.enabled = true;
+        sr.enabled  = mpct > 0f;
+        ActualizarHitbox(mpct);
+        MostrarFrame(mpct);
     }
 
     private void Update()
     {
-        if (modo == ModoActivacion.Ciclico)
+        if (modo == ModoActivacion.Ciclico || faseActual != Fase.Inactivo)
             TickCiclo(Time.deltaTime);
     }
 
@@ -72,6 +137,13 @@ public class HazardFire : MonoBehaviour
     {
         if (modo != ModoActivacion.Activador || faseActual != Fase.Inactivo) return;
         EntrarFase(Fase.Creciendo);
+    }
+
+    // Apaga el fuego gradualmente. Se puede conectar a alDesactivar de Lever u otro UnityEvent.
+    public void Desactivar()
+    {
+        if (modo != ModoActivacion.Activador || faseActual == Fase.Inactivo || faseActual == Fase.Menguando) return;
+        EntrarFase(Fase.Menguando);
     }
 
     private void TickCiclo(float dt)
@@ -103,7 +175,7 @@ public class HazardFire : MonoBehaviour
                     culmineToggle = !culmineToggle;
                     MostrarFrameCulmine(culmineToggle);
                 }
-                if (timerFase >= tiempoActivo)
+                if (modo == ModoActivacion.Ciclico && timerFase >= tiempoActivo)
                     EntrarFase(Fase.Menguando);
                 break;
 
@@ -194,5 +266,17 @@ public class HazardFire : MonoBehaviour
             if (momia != null) momia.Morir();
             else               Destroy(other.gameObject);
         }
+    }
+
+    // El fuego crece desde altura 0 (collider deshabilitado -> habilitado y redimensionado).
+    // Si el jugador ya esta dentro del area cuando el collider crece —p.ej. columpiandose
+    // por encima de la base— OnTriggerEnter2D NO se dispara. Reverificamos al jugador cada
+    // frame mientras permanezca dentro (BUG-018). PlayerDied() es idempotente (guard isDying).
+    private void OnTriggerStay2D(Collider2D other)
+    {
+        if (faseActual == Fase.Inactivo) return;
+
+        if (other.CompareTag("Player"))
+            GameLoopManager.Instance?.PlayerDied();
     }
 }

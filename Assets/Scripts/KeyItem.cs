@@ -13,6 +13,8 @@ public class KeyItem : MonoBehaviour
     [Header("Recolección")]
     [SerializeField] private float     radioPickup = 0.8f;
     [SerializeField] private LayerMask playerMask;
+    [Tooltip("Tiempo (s) tras lanzar o soltar la llave durante el cual NO puede volver a recogerse — evita la re-recolección instantánea.")]
+    [SerializeField] private float     cooldownRecoger = 0.5f;
 
     [Header("Lanzamiento")]
     [Tooltip("Velocidad con carga mínima — equivalente a minGrappleDistance/maxGrappleDistance × launchSpeed.")]
@@ -26,14 +28,11 @@ public class KeyItem : MonoBehaviour
     [SerializeField] private Vector2 offsetPortada = new Vector2(0.3f, -0.1f);
 
     [Header("Física")]
-    [Tooltip("Amortiguación lineal cuando la llave está en el suelo — evita que se deslice.")]
-    [SerializeField] private float rozamientoSuelo = 10f;
-
-    [Header("Respawn")]
-    [SerializeField] private float yVoidThreshold = -15f;
+    [Tooltip("Desaceleración horizontal (u/s²) en suelo — evita deslizamiento sin frenar la caída. Más alto = se detiene antes.")]
+    [SerializeField] private float rozamientoSuelo = 80f;
 
     [Header("UI Carga")]
-    [Tooltip("Mismo GameObject de barra de carga que usa GrappleScript.")]
+    [Tooltip("Opcional. Si se deja vacío, se hereda automáticamente la barra de carga del GrappleScript del jugador.")]
     [SerializeField] private GameObject barraRoot;
     [SerializeField] private UnityEngine.UI.Image barraImagen;
 
@@ -51,7 +50,6 @@ public class KeyItem : MonoBehaviour
     private GrappleScript  _grapple;
     private Transform      _player;
     private SpriteRenderer _playerSr;
-    private Vector2        _posOriginal;
     private float         _chargeTimer;
     private bool          _cargando;
     private float         _cooldownPickup;
@@ -62,28 +60,39 @@ public class KeyItem : MonoBehaviour
     {
         _rb  = GetComponent<Rigidbody2D>();
         _col = GetComponent<Collider2D>();
+
+        // Sin fricción: el frenado en suelo lo gestiona rozamientoSuelo por código, y sobre
+        // una MovingPlatform evita que el arrastre físico se sume al teletransporte (doble empuje)
+        _col.sharedMaterial = new PhysicsMaterial2D("LlaveSinFriccion") { friction = 0f, bounciness = 0f };
+        _col.enabled = false;   // reactivar fuerza a que el collider tome el material nuevo
+        _col.enabled = true;
     }
 
     private void Start()
     {
-        _posOriginal = transform.position;
         var playerGo = GameObject.FindWithTag("Player");
         if (playerGo != null)
         {
             _player   = playerGo.transform;
             _grapple  = playerGo.GetComponent<GrappleScript>();
             _playerSr = playerGo.GetComponent<SpriteRenderer>();
+
+            // La llave nunca colisiona físicamente con el jugador (lo atraviesa al
+            // lanzarla hacia atrás); el pickup usa OverlapCircle, no esta colisión
+            foreach (var pc in playerGo.GetComponentsInChildren<Collider2D>())
+                Physics2D.IgnoreCollision(_col, pc, true);
+
+            // Heredar la barra de carga del jugador si no se asignó por Inspector
+            if (_grapple != null)
+            {
+                if (barraRoot   == null) barraRoot   = _grapple.ChargeBarRoot;
+                if (barraImagen == null) barraImagen = _grapple.ChargeBarImage;
+            }
         }
     }
 
     private void Update()
     {
-        if (_rb.position.y < yVoidThreshold)
-        {
-            Respawn();
-            return;
-        }
-
         if (_cooldownPickup > 0f)
         {
             _cooldownPickup -= Time.deltaTime;
@@ -106,8 +115,14 @@ public class KeyItem : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Amortiguación alta en suelo para evitar deslizamiento; sin damping en vuelo
-        _rb.linearDamping = _estado == Estado.EnSuelo ? rozamientoSuelo : 0f;
+        // Frenar solo el deslizamiento horizontal en suelo — la gravedad sigue
+        // tirando libre en Y (linearDamping global frenaría también la caída)
+        if (_estado == Estado.EnSuelo)
+        {
+            Vector2 v = _rb.linearVelocity;
+            v.x = Mathf.MoveTowards(v.x, 0f, rozamientoSuelo * Time.fixedDeltaTime);
+            _rb.linearVelocity = v;
+        }
 
         if (_estado == Estado.Portada && _player != null)
         {
@@ -169,7 +184,7 @@ public class KeyItem : MonoBehaviour
         _estado            = Estado.EnVuelo;
         _rb.bodyType       = RigidbodyType2D.Dynamic;
         _col.enabled       = true;
-        _cooldownPickup    = 0.3f;
+        _cooldownPickup    = cooldownRecoger;
 
         if (_grapple != null) _grapple.enabled = true;
 
@@ -182,28 +197,32 @@ public class KeyItem : MonoBehaviour
         AudioManager.instance?.FxSoundEffect(sfxLanzar, transform, 1f);
     }
 
-    private void Respawn()
-    {
-        _cargando          = false;
-        _estado            = Estado.EnSuelo;
-        _rb.bodyType       = RigidbodyType2D.Dynamic;
-        _rb.linearVelocity = Vector2.zero;
-        _col.enabled       = true;
-        transform.position = _posOriginal;
-
-        if (_grapple != null && !_grapple.enabled)
-            _grapple.enabled = true;
-
-        if (barraRoot != null) barraRoot.SetActive(false);
-    }
-
     // ── API pública ───────────────────────────────────────────────
+
+    // Llamado por VoidScript cuando la llave cae al vacío — mismo void que el jugador
+    public void MorirPorVoid()
+    {
+        if (_estado == Estado.Portada && _grapple != null)
+            _grapple.enabled = true;
+        if (barraRoot != null) barraRoot.SetActive(false);
+        Destroy(gameObject);
+    }
 
     // Llamado por KeyDoor al abrir — consume la llave
     public void Consumir()
     {
         if (_grapple != null) _grapple.enabled = true;
         gameObject.SetActive(false);
+    }
+
+    // Llamado por KeyCarrier en Start() — congela la llave mientras la porta el enemigo
+    public void IniciarPortadaEnemigo()
+    {
+        _estado            = Estado.Portada;
+        _rb.bodyType       = RigidbodyType2D.Kinematic;
+        _rb.linearVelocity = Vector2.zero;
+        _col.enabled       = false;
+        enabled            = false;   // suspende Update: sin pickup ni input de ratón
     }
 
     // Llamado por el enemigo portador al morir — suelta la llave con física
@@ -213,7 +232,7 @@ public class KeyItem : MonoBehaviour
         _estado            = Estado.EnVuelo;
         _rb.bodyType       = RigidbodyType2D.Dynamic;
         _col.enabled       = true;
-        _cooldownPickup    = 0.4f;
+        _cooldownPickup    = cooldownRecoger;
         if (_grapple != null) _grapple.enabled = true;
     }
 
@@ -224,4 +243,24 @@ public class KeyItem : MonoBehaviour
         Gizmos.color = new Color(1f, 0.85f, 0f, 0.5f);
         Gizmos.DrawWireSphere(transform.position, radioPickup);
     }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Solo evaluar si la llave está en vuelo
+        if (_estado != Estado.EnVuelo) return;
+
+        // Verificar si el objeto pertenece a la capa Ground
+        if (collision.gameObject.layer == LayerMask.NameToLayer("Ground"))
+        {
+            // Analizar la dirección del impacto usando el primer punto de contacto
+            Vector2 normal = collision.contacts[0].normal;
+
+            // Si la normal apunta hacia arriba (Y > 0.7), es una superficie plana o rampa suave
+            if (normal.y > 0.7f)
+            {
+                _estado = Estado.EnSuelo;
+            }
+        }
+    }
+
 }

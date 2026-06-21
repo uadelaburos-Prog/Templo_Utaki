@@ -43,13 +43,15 @@ public class PatrollerAI : MonoBehaviour
     private SpriteRenderer _sr;
     private Transform      _player;
     private Transform      _objetivoPatrulla;
+    private KeyCarrier     _keyCarrier;
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
     private void Awake()
     {
-        _rb = GetComponent<Rigidbody2D>();
-        _sr = GetComponent<SpriteRenderer>();
+        _rb         = GetComponent<Rigidbody2D>();
+        _sr         = GetComponent<SpriteRenderer>();
+        _keyCarrier = GetComponent<KeyCarrier>();
 
         _rb.bodyType       = RigidbodyType2D.Kinematic;
         _rb.gravityScale   = 0f;
@@ -162,6 +164,7 @@ public class PatrollerAI : MonoBehaviour
         if (_estado == Estado.Muerto) return;
         _estado = Estado.Muerto;
         OcultarIconoAlerta();
+        _keyCarrier?.SoltarLlave();
         Destroy(gameObject);
     }
 

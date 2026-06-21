@@ -6,8 +6,9 @@ using UnityEngine;
 public class CheckpointZone : MonoBehaviour
 {
     [Header("Feedback")]
-    [SerializeField] private Animator  _animator;
-    [SerializeField] private AudioClip _sfxActivacion;
+    [SerializeField] private Animator               _animator;
+    [SerializeField] private AudioClip              _sfxActivacion;
+    [SerializeField] private WorldTextNotification  _notificacion;
 
     private static readonly int _paramActivado = Animator.StringToHash("Activado");
 
@@ -34,6 +35,7 @@ public class CheckpointZone : MonoBehaviour
 
         _activado = true;
         GameLoopManager.Instance?.GuardarCheckpoint(transform.position);
+        _notificacion?.Mostrar("¡CHECKPOINT!", 2f);
         SetEstadoVisual(conEfectos: true);
     }
 

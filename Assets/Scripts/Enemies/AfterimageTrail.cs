@@ -59,23 +59,31 @@ public class AfterimageTrail : MonoBehaviour
         sr.sortingOrder   = sourceRenderer.sortingOrder - 1;
         sr.color          = tintColor;
 
-        StartCoroutine(FadeAndDestroy(go, sr));
+        // El fade corre sobre el propio GO — independiente del ciclo de vida del fantasma
+        go.AddComponent<AfterimageImage>().Begin(sr, tintColor, fadeDuration);
+    }
+}
+
+// Componente temporal autocontenido — se agrega dinámicamente a cada afterimage GO.
+// Al correr la corrutina sobre sí mismo, Destroy(fantasma) no la interrumpe.
+sealed class AfterimageImage : MonoBehaviour
+{
+    public void Begin(SpriteRenderer sr, Color startColor, float duration)
+    {
+        StartCoroutine(Fade(sr, startColor, duration));
     }
 
-    private IEnumerator FadeAndDestroy(GameObject go, SpriteRenderer sr)
+    private IEnumerator Fade(SpriteRenderer sr, Color startColor, float duration)
     {
-        Color startColor = sr.color;
-        float t          = 0f;
-
-        while (t < fadeDuration)
+        float t = 0f;
+        while (t < duration)
         {
-            if (sr == null) yield break;
+            if (sr == null) { Destroy(gameObject); yield break; }
             t       += Time.deltaTime;
-            float a  = Mathf.Lerp(startColor.a, 0f, t / fadeDuration);
-            sr.color = new Color(startColor.r, startColor.g, startColor.b, a);
+            sr.color = new Color(startColor.r, startColor.g, startColor.b,
+                                 Mathf.Lerp(startColor.a, 0f, t / duration));
             yield return null;
         }
-
-        if (go != null) Destroy(go);
+        Destroy(gameObject);
     }
 }

@@ -6,7 +6,8 @@
  *   - Collider2D      : Is Trigger = true
  *   - SpriteRenderer
  *   - AfterimageTrail : asignar este SpriteRenderer en sourceRenderer
- *   - Animator        : parámetros Chasing (bool), Attacking (bool)
+ *   - Animator        : parámetros Chasing (bool), Attacking (bool),
+ *                       Moving (bool), Dead (bool)
  *
  * Hijos del GameObject:
  *   - PuntoA, PuntoB : extremos de la ruta de patrulla
@@ -48,12 +49,14 @@ public class SpectralPatrollerAI : MonoBehaviour
     [SerializeField] private float radioAbandonar = 8.5f;
 
     [Header("Órbita")]
-    [Tooltip("Distancia de órbita alrededor del jugador en unidades.")]
-    [SerializeField] private float orbitRadius   = 3f;
+    [Tooltip("Distancia mínima que el Espectral mantiene del jugador; no se acerca más salvo durante el ataque.")]
+    [SerializeField] private float orbitRadius     = 3f;
     [Tooltip("Velocidad angular de la órbita en radianes por segundo.")]
-    [SerializeField] private float orbitVelocity = 1.5f;
-    [Tooltip("Velocidad de desplazamiento hacia el punto objetivo de órbita.")]
-    [SerializeField] private float chaseSpeed    = 5f;
+    [SerializeField] private float orbitVelocity   = 1.5f;
+    [Tooltip("Velocidad de acercamiento radial: qué tan rápido cierra distancia (de a poco).")]
+    [SerializeField] private float approachSpeed   = 0.6f;
+    [Tooltip("Firmeza del resorte que corrige hacia la distancia mínima. Más alto = menos invade el colchón.")]
+    [SerializeField] private float radialStiffness = 1.5f;
 
     [Header("Flotación")]
     [Tooltip("Frecuencia de la variación sinusoidal del radio de órbita.")]
@@ -66,6 +69,8 @@ public class SpectralPatrollerAI : MonoBehaviour
     [Tooltip("Distancia total del dash en unidades (incluyendo el overshoot tras el jugador).")]
     [SerializeField] private float dashDistance = 8f;
     [SerializeField] private float cooldown     = 2f;
+    [Tooltip("Distancia máxima al jugador desde la que puede iniciar el dash. Si está más lejos, sigue orbitando hasta acercarse.")]
+    [SerializeField] private float dashTriggerRange = 3.5f;
 
     [Header("Quietud del jugador")]
     [Tooltip("Velocidad mínima (u/s) por debajo de la cual el jugador se considera quieto.")]
@@ -80,6 +85,8 @@ public class SpectralPatrollerAI : MonoBehaviour
     [Header("Feedback")]
     [SerializeField] private GameObject iconoAlerta;
     [SerializeField] private AudioClip  sfxAlerta;
+    [Tooltip("Duración de la animación de muerte antes de destruir el objeto (segundos).")]
+    [SerializeField] private float      deathAnimDuration = 0.5f;
 
     // ── Referencias ───────────────────────────────────────────────
 
@@ -87,8 +94,10 @@ public class SpectralPatrollerAI : MonoBehaviour
     private SpriteRenderer  _sr;
     private Animator        _animator;
     private AfterimageTrail _trail;
+    private Collider2D      _col;
     private Transform       _player;
     private Transform       _objetivoPatrulla;
+    private KeyCarrier      _keyCarrier;
 
     // ── Estado ────────────────────────────────────────────────────
 
@@ -101,7 +110,7 @@ public class SpectralPatrollerAI : MonoBehaviour
 
     // ── Órbita ────────────────────────────────────────────────────
 
-    private float     _orbitAngle;
+    private float     _orbitDir = 1f;   // sentido de giro (+1 / -1), elegido al detectar
     private Coroutine _parpadeoRoutine;
     private Color     _colorOriginal;
 
@@ -113,15 +122,18 @@ public class SpectralPatrollerAI : MonoBehaviour
     private static readonly int ParamChasing   = Animator.StringToHash("Chasing");
     private static readonly int ParamAttacking = Animator.StringToHash("Attacking");
     private static readonly int ParamMoving    = Animator.StringToHash("Moving");
+    private static readonly int ParamDead      = Animator.StringToHash("Dead");
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
     private void Awake()
     {
-        _rb    = GetComponent<Rigidbody2D>();
-        _sr    = GetComponent<SpriteRenderer>();
-        _animator = GetComponent<Animator>();
-        _trail = GetComponent<AfterimageTrail>();
+        _rb           = GetComponent<Rigidbody2D>();
+        _sr           = GetComponent<SpriteRenderer>();
+        _animator     = GetComponent<Animator>();
+        _trail        = GetComponent<AfterimageTrail>();
+        _col          = GetComponent<Collider2D>();
+        _keyCarrier   = GetComponent<KeyCarrier>();
         _colorOriginal = _sr.color;
 
         _rb.bodyType       = RigidbodyType2D.Kinematic;
@@ -129,7 +141,7 @@ public class SpectralPatrollerAI : MonoBehaviour
         _rb.freezeRotation = true;
 
         // El trigger debe estar activo para que OnTriggerEnter2D detecte al jugador
-        GetComponent<Collider2D>().isTrigger = true;
+        _col.isTrigger = true;
 
         if (iconoAlerta != null) iconoAlerta.SetActive(false);
     }
@@ -232,13 +244,33 @@ public class SpectralPatrollerAI : MonoBehaviour
             return;
         }
 
-        // Avanzar ángulo orbital; radio varía sinusoidalmente para feel orgánico
-        _orbitAngle += orbitVelocity * Time.fixedDeltaTime;
-        float r         = orbitRadius + floatAmplitude * Mathf.Sin(Time.time * floatSpeed);
-        Vector2 offset  = new Vector2(Mathf.Cos(_orbitAngle), Mathf.Sin(_orbitAngle)) * r;
-        MoverHacia((Vector2)_player.position + offset, chaseSpeed);
+        // Steering orgánico: el fantasma merodea al jugador actual combinando una
+        // componente tangencial (girar) con un resorte radial suave (acercarse de a
+        // poco). No se pega a un círculo rígido, por lo que se ve natural.
+        Vector2 toPlayer = (Vector2)_player.position - _rb.position;
+        float   dist     = Mathf.Max(toPlayer.magnitude, 0.001f);
+        Vector2 hacia    = toPlayer / dist;
+        Vector2 tangente = new Vector2(-hacia.y, hacia.x) * _orbitDir;
 
-        if (_cooldownTimer <= 0f && _playerStillTimer >= playerStillTime)
+        // Distancia mínima "respirando" con la flotación sinusoidal
+        float radioMin = orbitRadius + floatAmplitude * Mathf.Sin(Time.time * floatSpeed);
+
+        // Tangencial: velocidad angular ~constante (v = ω·r)
+        Vector2 vTangencial = tangente * orbitVelocity * dist;
+
+        // Radial (resorte): lejos del colchón se acerca de a poco (tope approachSpeed);
+        // si entra de más, empuja hacia afuera para no tocar al jugador.
+        float vRadial = Mathf.Clamp((dist - radioMin) * radialStiffness,
+                                    -approachSpeed * 2f, approachSpeed);
+
+        Vector2 vDeseada = vTangencial + hacia * vRadial;
+        MoverPosicionOrbital(_rb.position + vDeseada * Time.fixedDeltaTime);
+
+        // Mientras orbita, mantener la cara hacia el jugador
+        if (Mathf.Abs(toPlayer.x) > 0.01f) _sr.flipX = toPlayer.x > 0f;
+
+        // Solo ataca si el jugador está quieto Y el fantasma ya está relativamente cerca
+        if (_cooldownTimer <= 0f && _playerStillTimer >= playerStillTime && dist <= dashTriggerRange)
             EnterWindup();
     }
 
@@ -280,12 +312,11 @@ public class SpectralPatrollerAI : MonoBehaviour
     private void EnterOrbita(bool alertar)
     {
         _estado = Estado.Orbita;
-        // Iniciar ángulo desde la posición actual del fantasma para entrada suave
-        Vector2 offset = _rb.position - (Vector2)_player.position;
-        _orbitAngle    = Mathf.Atan2(offset.y, offset.x);
 
         if (alertar)
         {
+            // Elegir sentido de giro al iniciar el acecho, para que cada encuentro varíe
+            _orbitDir = Random.value < 0.5f ? 1f : -1f;
             AudioManager.instance?.FxSoundEffect(sfxAlerta, transform, 1f);
             MostrarIconoAlerta();
         }
@@ -337,8 +368,29 @@ public class SpectralPatrollerAI : MonoBehaviour
     {
         if (_estado == Estado.Muerto) return;
         _estado = Estado.Muerto;
+
+        DetenerParpadeo();
         _trail.StopTrail();
         OcultarIconoAlerta();
+        _keyCarrier?.SoltarLlave();
+
+        // Desactivar el trigger para que el cadáver no siga matando al jugador
+        _col.enabled = false;
+
+        if (_animator != null)
+        {
+            _animator.SetBool(ParamChasing,   false);
+            _animator.SetBool(ParamAttacking, false);
+            _animator.SetBool(ParamMoving,    false);
+            _animator.SetBool(ParamDead,      true);
+        }
+
+        StartCoroutine(MuerteRoutine());
+    }
+
+    private IEnumerator MuerteRoutine()
+    {
+        yield return new WaitForSeconds(deathAnimDuration);
         Destroy(gameObject);
     }
 
@@ -361,6 +413,24 @@ public class SpectralPatrollerAI : MonoBehaviour
             return;
 
         _rb.MovePosition(_rb.position + dir * paso);
+
+        if (Mathf.Abs(dir.x) > 0.01f)
+            _sr.flipX = dir.x > 0;
+    }
+
+    // Mueve el rigidbody directamente a una posición objetivo (sin limitar el paso,
+    // la velocidad ya la fija la órbita). Respeta SpectralWalls y actualiza el flip.
+    private void MoverPosicionOrbital(Vector2 destino)
+    {
+        Vector2 mov  = destino - _rb.position;
+        float   dist = mov.magnitude;
+        if (dist < 0.0001f) return;
+
+        Vector2 dir = mov / dist;
+        if (Physics2D.Raycast(_rb.position, dir, dist + 0.15f, spectralWallMask))
+            return;
+
+        _rb.MovePosition(destino);
 
         if (Mathf.Abs(dir.x) > 0.01f)
             _sr.flipX = dir.x > 0;

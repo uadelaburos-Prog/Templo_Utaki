@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 using UnityEngine.UI;
 
 // Un único gancho, dos comportamientos según lo que golpea:
@@ -100,6 +101,7 @@ public class GrappleScript : MonoBehaviour
     private GameObject  grabObject;
     private Rigidbody2D hookedRb;
     private Vector2     hookOffset;
+    private IHookable   _hookable;
 
     // Objetivo de columpio — permite seguir objetos móviles (plataformas, etc.)
     private Collider2D _swingTarget;
@@ -108,8 +110,14 @@ public class GrappleScript : MonoBehaviour
     private bool _isClimbing;
     public  bool IsClimbing => _isClimbing;
 
+    // Barra de carga compartida — KeyItem la reutiliza para no asignarla por escena
+    public GameObject ChargeBarRoot  => chargeBarRoot;
+    public Image      ChargeBarImage => chargeBarImage;
+
     private readonly List<SpriteRenderer> highlightedRenderers = new List<SpriteRenderer>();
     private readonly List<Color>          originalColors        = new List<Color>();
+    private readonly List<Tilemap>        highlightedTilemaps   = new List<Tilemap>();
+    private readonly List<Color>          originalTilemapColors = new List<Color>();
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -123,7 +131,13 @@ public class GrappleScript : MonoBehaviour
         joint.enabled               = false;
         joint.autoConfigureDistance = false;
         joint.maxDistanceOnly       = true;
-        joint.enableCollision       = false;
+        // IMPORTANTE: true, no false. Con connectedBody = null el joint se conecta al
+        // "ground body" implícito de Box2D (al que pertenecen TODOS los colliders estáticos
+        // sin Rigidbody2D: puerta, fuego, paredes…). enableCollision = false filtraba la
+        // colisión del jugador con ese cuerpo entero durante el swing → atravesaba puerta y
+        // fuego sin chocar ni morir. Con true, el jugador sigue colisionando normalmente
+        // mientras se columpia. No hay efecto adverso: no existe un connectedBody real.
+        joint.enableCollision       = true;
 
         line.useWorldSpace = true;
         line.startWidth    = ropeWidth;
@@ -155,6 +169,8 @@ public class GrappleScript : MonoBehaviour
 
     private void Update()
     {
+        if (GameLoopManager.IsPaused) return;
+
         if (cooldownTimer > 0f) cooldownTimer -= Time.deltaTime;
 
         HandleInput();
@@ -205,6 +221,8 @@ public class GrappleScript : MonoBehaviour
 
     private void HandleInput()
     {
+        if (GameLoopManager.IsPaused) return;
+
         if (Input.GetKeyDown(KeyCode.Mouse0) && cooldownTimer <= 0f &&
             (state == GrappleState.Idle || state == GrappleState.Retracting))
         {
@@ -386,7 +404,8 @@ public class GrappleScript : MonoBehaviour
         attachType     = AttachType.Pull;
         state          = GrappleState.Attached;
 
-        grabObject.GetComponent<ReactiveWall>()?.OnHooked();
+        _hookable = grabObject.GetComponent<IHookable>();
+        _hookable?.OnHooked();
         AudioManager.instance?.FxSoundEffect(sfxEnganchar, transform, 1f);
     }
 
@@ -413,7 +432,8 @@ public class GrappleScript : MonoBehaviour
 
     private void ClearPullState()
     {
-        grabObject?.GetComponent<ReactiveWall>()?.OnReleased();
+        _hookable?.OnReleased();
+        _hookable  = null;
         grabObject = null;
         hookedRb   = null;
     }
@@ -589,13 +609,28 @@ public class GrappleScript : MonoBehaviour
         {
             highlightedRenderers.Clear();
             originalColors.Clear();
-            foreach (var col in Physics2D.OverlapCircleAll(transform.position, maxGrappleDistance, grappleLayerMask))
+            highlightedTilemaps.Clear();
+            originalTilemapColors.Clear();
+
+            foreach (var col in Physics2D.OverlapCircleAll(transform.position, maxGrappleDistance, grappleLayerMask | hookMask))
             {
                 var sr = col.GetComponent<SpriteRenderer>();
-                if (sr == null) continue;
-                highlightedRenderers.Add(sr);
-                originalColors.Add(sr.color);
-                sr.color = highlightColor;
+                if (sr != null)
+                {
+                    highlightedRenderers.Add(sr);
+                    originalColors.Add(sr.color);
+                    sr.color = highlightColor;
+                    continue;
+                }
+
+                // Tilemap: cada tile tiene su propio color; teñir el mapa completo vía Tilemap.color
+                var tm = col.GetComponent<Tilemap>();
+                if (tm != null)
+                {
+                    highlightedTilemaps.Add(tm);
+                    originalTilemapColors.Add(tm.color);
+                    tm.color = highlightColor;
+                }
             }
         }
         else
@@ -605,6 +640,12 @@ public class GrappleScript : MonoBehaviour
                     highlightedRenderers[i].color = originalColors[i];
             highlightedRenderers.Clear();
             originalColors.Clear();
+
+            for (int i = 0; i < highlightedTilemaps.Count; i++)
+                if (highlightedTilemaps[i] != null)
+                    highlightedTilemaps[i].color = originalTilemapColors[i];
+            highlightedTilemaps.Clear();
+            originalTilemapColors.Clear();
         }
     }
 

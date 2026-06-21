@@ -31,9 +31,9 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("UI — Paneles")]
     [SerializeField] private GameObject panelFinNivel;
+    [SerializeField] private TMP_Text   txtResumenPanel;
     [SerializeField] private GameObject panelPausa;
     [SerializeField] private GameObject panelOpciones;
-    [SerializeField] private GameObject panelVictoria;
 
     [Header("Muerte Dramática")]
     [Tooltip("RawImage con el shader SpotlightOverlay. Debe ser hijo del GameObject de GameLoopManager para persistir entre escenas.")]
@@ -44,6 +44,8 @@ public class GameLoopManager : MonoBehaviour
     [SerializeField] private float spotlightFadeOut = 0.20f;
     [Tooltip("Segundos que el spotlight permanece visible tras el fade-in. 0 = dura hasta que la escena se recargue.")]
     [SerializeField] private float tiempoSpotlight  = 0f;
+
+    public  static bool IsPaused { get; private set; }
 
     private float   tiempoAcumulado;
     private int     cristalesAcumulados;
@@ -84,9 +86,16 @@ public class GameLoopManager : MonoBehaviour
     {
         nivelActual         = scene.buildIndex;
         isDying             = false;
+        isPaused            = false;
+        IsPaused            = false;
         Time.timeScale      = 1f;
         AudioListener.pause = false;
         if (spotlightOverlay != null) spotlightOverlay.gameObject.SetActive(false);
+
+        // Red de seguridad: si un panel de pausa/opciones quedó activo al cambiar de
+        // escena (muerte durante pausa, etc.), desactivarlo para que no quede colgado.
+        if (panelPausa    != null) panelPausa.SetActive(false);
+        if (panelOpciones != null) panelOpciones.SetActive(false);
 
         // Al volver al menu (escena 0) el Canvas DDOL del GLM no debe bloquear la UI del menu.
         // El panel queda oculto de inmediato; el menu maneja su propia presentacion visual.
@@ -145,6 +154,10 @@ public class GameLoopManager : MonoBehaviour
         if (isDying) return;
         isDying = true;
 
+        // Si el jugador estaba en pausa al morir (pausa y hazard en el mismo frame),
+        // cerrar el menú para que no sobreviva al reinicio de escena (BUG-013).
+        if (isPaused) CerrarPausaSilencioso();
+
         contadorMuertes++;
         ActualizarHUDMuertes();
         AudioManager.instance?.FxSoundEffect(sfxMuerte, transform, 1f);
@@ -183,35 +196,29 @@ public class GameLoopManager : MonoBehaviour
         tiempoAcumulado     += Time.timeSinceLevelLoad;
         cristalesAcumulados += cristalesObtenidos;
 
-        ActualizarPanelFinNivel();
+        ActualizarPanelResultado($"Tiempo: {Time.timeSinceLevelLoad:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}");
 
         if (panelFinNivel != null) panelFinNivel.SetActive(true);
-        Time.timeScale = 0f;
+        IsPaused              = true;
+        Time.timeScale        = 0f;
+        AudioListener.pause   = true;
     }
 
     public void ContinuarSiguienteNivel()
     {
         LimpiarCheckpoint();
-        Time.timeScale = 1f;
+        IsPaused              = false;
+        Time.timeScale        = 1f;
+        AudioListener.pause   = false;
         if (panelFinNivel != null) panelFinNivel.SetActive(false);
 
         int siguienteNivel = nivelActual + 1;
+        cristalesObtenidos = 0;
 
-        if (siguienteNivel >= totalNiveles)
-            MostrarVictoria();
-        else
-        {
-            nivelActual        = siguienteNivel;
-            cristalesObtenidos = 0;
-            StartCoroutine(CargarEscenaConFade(siguienteNivel));
-        }
-    }
-
-    public void MostrarVictoria()
-    {
-        if (panelVictoria != null) panelVictoria.SetActive(true);
-        Time.timeScale = 0f;
-        ActualizarPanelVictoria();
+        // Si no hay más niveles, vuelve al menú principal.
+        int destino = siguienteNivel < totalNiveles ? siguienteNivel : 0;
+        nivelActual = destino;
+        StartCoroutine(CargarEscenaConFade(destino));
     }
 
     // ── PAUSA ─────────────────────────────────────────────────────
@@ -220,9 +227,13 @@ public class GameLoopManager : MonoBehaviour
     {
         // No interrumpir el fin de nivel ni la victoria
         if (panelFinNivel != null && panelFinNivel.activeSelf) return;
-        if (panelVictoria != null && panelVictoria.activeSelf) return;
+
+        // No permitir pausar durante la secuencia de muerte: el reinicio recarga
+        // la escena y un panel abierto aquí quedaría colgado tras el respawn (BUG-013).
+        if (isDying) return;
 
         isPaused              = !isPaused;
+        IsPaused              = isPaused;
         Time.timeScale        = isPaused ? 0f : 1f;
         AudioListener.pause   = isPaused;
 
@@ -271,7 +282,6 @@ public class GameLoopManager : MonoBehaviour
         // Ocultar paneles que quedan activos en el Canvas DDOL — si persisten,
         // tapan la UI del menu y el jugador no puede interactuar con ella.
         if (panelFinNivel != null) panelFinNivel.SetActive(false);
-        if (panelVictoria != null) panelVictoria.SetActive(false);
 
         // Cancelar corrutinas en vuelo (RutinaReinicio, RutinaMuerteDramatica…).
         // Sin esto, una RutinaReinicio pendiente podria cargar la escena de juego
@@ -293,6 +303,7 @@ public class GameLoopManager : MonoBehaviour
     private void CerrarPausaSilencioso()
     {
         isPaused       = false;
+        IsPaused       = false;
         Time.timeScale = 1f;
         if (panelPausa    != null) panelPausa.SetActive(false);
         if (panelOpciones != null) panelOpciones.SetActive(false);
@@ -424,19 +435,8 @@ public class GameLoopManager : MonoBehaviour
             txtMuertes.text = $"Muertes: {contadorMuertes}";
     }
 
-    private void ActualizarPanelFinNivel()
+    private void ActualizarPanelResultado(string texto)
     {
-        if (panelFinNivel == null) return;
-        var resumen = panelFinNivel.GetComponentInChildren<TextMeshProUGUI>();
-        if (resumen != null)
-            resumen.text = $"Tiempo: {Time.timeSinceLevelLoad:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}";
-    }
-
-    private void ActualizarPanelVictoria()
-    {
-        if (panelVictoria == null) return;
-        var resumen = panelVictoria.GetComponentInChildren<TextMeshProUGUI>();
-        if (resumen != null)
-            resumen.text = $"Tiempo total: {tiempoAcumulado:F2}s\nCristales: {cristalesAcumulados}";
+        if (txtResumenPanel != null) txtResumenPanel.text = texto;
     }
 }

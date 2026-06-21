@@ -58,9 +58,15 @@ public class MummyAI : MonoBehaviour
     [SerializeField] private float radioDeteccion = 5f;
     [Tooltip("Radio al que el jugador debe alejarse para abandonar la persecución.")]
     [SerializeField] private float radioAbandonar = 7f;
+    [Tooltip("Layers que bloquean la línea de visión (paredes, suelo). El jugador no se detecta si hay alguno entre la momia y él. Si se deja vacío usa maskSuelo.")]
+    [SerializeField] private LayerMask maskVisionBloqueo;
 
     [Header("Persecución")]
     [SerializeField] private float velocidadPersecucion = 3.5f;
+    [Tooltip("Diferencia de altura (jugador por encima de la momia) que dispara un salto durante la persecución, aunque no haya pared adelante.")]
+    [SerializeField] private float alturaSaltoPersecucion = 1.2f;
+    [Tooltip("Distancia horizontal mínima al jugador para fijar dirección. Dentro de esta zona la momia no cambia de lado (evita el flip-flop si el jugador está justo encima).")]
+    [SerializeField] private float zonaMuertaX = 0.3f;
 
     [Header("Detección de borde")]
     [Tooltip("LayerMask del suelo.")]
@@ -108,6 +114,7 @@ public class MummyAI : MonoBehaviour
     private SpriteRenderer _sr;
     private Animator       _animator;
     private Transform      _player;
+    private KeyCarrier     _keyCarrier;
 
     // ── Estado interno ────────────────────────────────────────────
     private Estado _estado          = Estado.Patrulla;
@@ -119,15 +126,22 @@ public class MummyAI : MonoBehaviour
 
     private void Awake()
     {
-        _rb       = GetComponent<Rigidbody2D>();
-        _col      = GetComponent<Collider2D>();
-        _sr       = GetComponent<SpriteRenderer>();
-        _animator = GetComponent<Animator>();
+        _rb         = GetComponent<Rigidbody2D>();
+        _col        = GetComponent<Collider2D>();
+        _sr         = GetComponent<SpriteRenderer>();
+        _animator   = GetComponent<Animator>();
+        _keyCarrier = GetComponent<KeyCarrier>();
 
         _rb.bodyType       = RigidbodyType2D.Dynamic;
         _rb.gravityScale   = 1f;
         _rb.freezeRotation = true;
         _rb.interpolation  = RigidbodyInterpolation2D.Interpolate;
+
+        // Sin fricción: la momia se mueve por velocidad controlada, no la necesita, y
+        // así no se "pega" a las paredes al empujar contra ellas durante un salto
+        _col.sharedMaterial = new PhysicsMaterial2D("MomiaSinFriccion") { friction = 0f, bounciness = 0f };
+        _col.enabled = false;   // reactivar fuerza a que el collider tome el material nuevo
+        _col.enabled = true;
 
         if (iconoAlerta != null) iconoAlerta.SetActive(false);
     }
@@ -154,7 +168,7 @@ public class MummyAI : MonoBehaviour
         {
             case Estado.Idle:
                 _idleTimer -= Time.fixedDeltaTime;
-                if (dist <= radioDeteccion)
+                if (dist <= radioDeteccion && TieneLineaDeVision())
                     TransicionAPersecucion();
                 else if (_idleTimer <= 0f)
                     _estado = Estado.Patrulla;
@@ -162,7 +176,7 @@ public class MummyAI : MonoBehaviour
 
             case Estado.Patrulla:
                 Patrullar();
-                if (dist <= radioDeteccion)
+                if (dist <= radioDeteccion && TieneLineaDeVision())
                     TransicionAPersecucion();
                 break;
 
@@ -202,7 +216,7 @@ public class MummyAI : MonoBehaviour
         }
 
         // Pared superable → saltar
-        if (paredSaltable && Mathf.Abs(_rb.linearVelocity.y) < 0.5f && _jumpCooldownTimer <= 0f)
+        if (paredSaltable && EstaEnSuelo() && _jumpCooldownTimer <= 0f)
             Saltar();
 
         MoverHorizontal(velocidadPatrulla, _dirPatrulla);
@@ -210,15 +224,32 @@ public class MummyAI : MonoBehaviour
 
     private void Perseguir()
     {
-        float dirX = Mathf.Sign(_player.position.x - transform.position.x);
+        // Zona muerta horizontal: si el jugador está casi justo encima no se oscila la
+        // dirección (evita el flip-flop a toda velocidad); si está arriba, salta recto
+        float deltaX = _player.position.x - transform.position.x;
+        float dirX   = Mathf.Abs(deltaX) < zonaMuertaX ? 0f : Mathf.Sign(deltaX);
 
-        // Saltar si hay pared superable durante la persecución
+        bool enSuelo       = EstaEnSuelo();
         bool hayPared      = HayParedAdelante(dirX);
         bool paredSaltable = hayPared && !ParedDemasiadoAlta(dirX);
-        if (paredSaltable && Mathf.Abs(_rb.linearVelocity.y) < 0.5f && _jumpCooldownTimer <= 0f)
+        // Saltar si el jugador está bastante más arriba — intenta alcanzarlo aunque no haya pared
+        bool jugadorArriba = _player.position.y - transform.position.y > alturaSaltoPersecucion;
+
+        if ((paredSaltable || jugadorArriba) && enSuelo && _jumpCooldownTimer <= 0f)
             Saltar();
 
-        MoverHorizontal(velocidadPersecucion, dirX);
+        // Tocando pared y sin estar saltándola → no empujar contra ella (evita el wall-stick),
+        // pero sigue saltando e intentando alcanzar al jugador
+        bool subiendo = _rb.linearVelocity.y > 0.5f;
+        if (hayPared && !subiendo)
+        {
+            _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
+            if (Mathf.Abs(dirX) > 0.01f) _sr.flipX = dirX > 0;
+            return;
+        }
+
+        // En persecución es "más tonta": no respeta bordes y puede caer del borde
+        MoverHorizontal(velocidadPersecucion, dirX, respetarBorde: false);
     }
 
     // ── Movimiento ────────────────────────────────────────────────
@@ -231,11 +262,11 @@ public class MummyAI : MonoBehaviour
         _estado             = Estado.Idle;
     }
 
-    /// <summary>Mueve la Momia horizontalmente. Durante el salto omite el edge check para mantener momentum.</summary>
-    private void MoverHorizontal(float velocidad, float dirX)
+    /// <summary>Mueve la Momia horizontalmente. Durante el salto omite el edge check para mantener momentum. Con respetarBorde=false ignora los bordes (persecución).</summary>
+    private void MoverHorizontal(float velocidad, float dirX, bool respetarBorde = true)
     {
         bool subiendo = _rb.linearVelocity.y > 0.5f;
-        if (!subiendo && !HaySueloAdelante(dirX))
+        if (respetarBorde && !subiendo && !HaySueloAdelante(dirX))
         {
             _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
             return;
@@ -254,6 +285,29 @@ public class MummyAI : MonoBehaviour
     }
 
     // ── Raycasts ──────────────────────────────────────────────────
+
+    /// <summary>True si no hay paredes/suelo entre la momia y el jugador (línea de visión despejada).</summary>
+    private bool TieneLineaDeVision()
+    {
+        LayerMask mask = maskVisionBloqueo == 0 ? maskSuelo : maskVisionBloqueo;
+        if (mask == 0) return true;
+
+        // Linecast desde el centro del collider (ojos) hasta el jugador: si golpea
+        // algún bloqueador, la visión está obstruida
+        Vector2 origen  = _col.bounds.center;
+        Vector2 destino = _player.position;
+        return Physics2D.Linecast(origen, destino, mask).collider == null;
+    }
+
+    private bool EstaEnSuelo()
+    {
+        if (maskSuelo == 0) return true;
+
+        // Raycast corto hacia abajo desde la base del collider — true solo si pisa suelo
+        Bounds  b      = _col.bounds;
+        Vector2 origen = new Vector2(b.center.x, b.min.y + 0.05f);
+        return Physics2D.Raycast(origen, Vector2.down, 0.15f, maskSuelo).collider != null;
+    }
 
     private bool HaySueloAdelante(float dirX)
     {
@@ -291,7 +345,14 @@ public class MummyAI : MonoBehaviour
         _rb.bodyType       = RigidbodyType2D.Kinematic;
         _col.enabled       = false;
         OcultarIconoAlerta();
+        // La llave cae inmediatamente — mientras la animación de muerte corre
+        _keyCarrier?.SoltarLlave();
 
+        // Neutralizar parámetros para que ninguna transición Any State (Walking/Chasing/
+        // Jumping/Falling) interrumpa la animación de muerte y la deje como última
+        _animator.SetBool (ParamWalking,   false);
+        _animator.SetBool (ParamChasing,   false);
+        _animator.SetFloat(ParamVelocityY, 0f);
         _animator.SetTrigger(ParamDead);
         StartCoroutine(DestruirTrasAnimacion());
     }
@@ -377,5 +438,15 @@ public class MummyAI : MonoBehaviour
         // Línea vertical entre ambos raycasts — visualiza la zona "saltable"
         Gizmos.color = new Color(1f, 0.55f, 0.1f, 0.4f);
         Gizmos.DrawLine(posBaja, posAlta);
+
+        // Línea de visión al jugador en runtime: verde = despejada, rojo = obstruida
+        if (Application.isPlaying && _player != null && _col != null)
+        {
+            float dist = Vector2.Distance(transform.position, _player.position);
+            Gizmos.color = dist <= radioDeteccion && TieneLineaDeVision()
+                ? new Color(0.2f, 1f, 0.2f, 0.8f)
+                : new Color(1f, 0.2f, 0.2f, 0.6f);
+            Gizmos.DrawLine(_col.bounds.center, _player.position);
+        }
     }
 }

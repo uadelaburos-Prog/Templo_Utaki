@@ -38,8 +38,14 @@ public class Projectile : MonoBehaviour
     {
         direccion = dir.normalized;
 
-        // Rota el sprite para apuntar en la direccion de vuelo.
-        float angulo  = Mathf.Atan2(direccion.y, direccion.x) * Mathf.Rad2Deg;
+        // El sprite original apunta a la IZQUIERDA (-X). Si vuela hacia la derecha lo
+        // espejamos en X (en vez de rotarlo 180 y dejarlo boca abajo); asi conserva
+        // su orientacion vertical. El angulo se mide desde el frente real del sprite.
+        bool haciaDerecha = direccion.x > 0f;
+        sr.flipX = haciaDerecha;
+
+        float angulo = Mathf.Atan2(direccion.y, direccion.x) * Mathf.Rad2Deg;
+        if (!haciaDerecha) angulo += 180f;   // sin espejar, el frente sigue siendo -X
         transform.rotation = Quaternion.Euler(0f, 0f, angulo);
     }
 

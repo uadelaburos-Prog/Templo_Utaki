@@ -132,6 +132,8 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
+        if (GameLoopManager.IsPaused) return;
+
         inputX = 0f;
         if      (Input.GetKey(KeyCode.D)) inputX =  1f;
         else if (Input.GetKey(KeyCode.A)) inputX = -1f;
@@ -140,8 +142,9 @@ public class PlayerMovement : MonoBehaviour
 
         if (inputX != 0f) sr.flipX = inputX < 0f;
 
-        // Saltar mientras se cuelga corta la soga en el mismo frame
-        if (Input.GetKeyDown(KeyCode.Space) && isHanging)
+        // Saltar colgado EN EL AIRE corta la soga; en el suelo se conserva
+        // (salta con la soga puesta → al despegar pasa a balanceo)
+        if (Input.GetKeyDown(KeyCode.Space) && isHanging && !isGrounded)
             grapple.GrappleRetract();
 
         // Coyote time — se activa también al soltar el gancho
@@ -165,8 +168,9 @@ public class PlayerMovement : MonoBehaviour
             AudioManager.instance?.FxSoundEffect(sfxAterrizaje, transform, 1f);
         wasGrounded = isGrounded;
 
-        // Ejecutar salto
-        bool canJump = !hangingNow && (isGrounded || coyoteTimer > 0f);
+        // Ejecutar salto — en el suelo siempre se puede saltar (incluso enganchado);
+        // el coyote solo aplica fuera del suelo y sin soga
+        bool canJump = isGrounded || (!hangingNow && coyoteTimer > 0f);
         if (jumpQueued && canJump)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
@@ -185,10 +189,14 @@ public class PlayerMovement : MonoBehaviour
 
         if (isGrounded) jumpCutDone = false;
 
+        // Balanceo (animación Swing) solo si cuelga en el aire o trepa por la soga;
+        // enganchado y pisando suelo → camina normal y la soga solo capea distancia
+        bool balanceando = hangingNow && (!isGrounded || grapple.IsClimbing);
+
         // Parámetros del Animator — después de que hangingNow está definido
-        anim.SetBool("IsRunning",  isGrounded && inputX != 0f);
+        anim.SetBool("IsRunning",  isGrounded && !balanceando && inputX != 0f);
         anim.SetBool("IsGrounded", isGrounded);
-        anim.SetBool("IsHanging",  hangingNow);
+        anim.SetBool("IsHanging",  balanceando);
         anim.SetFloat("VelocityY", rb.linearVelocity.y);
         anim.SetBool("IsClimbing", hangingNow && grapple.IsClimbing);
     }
@@ -208,8 +216,12 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
+        // Balanceo físico solo si cuelga en el aire o trepa por la soga; enganchado
+        // y pisando suelo → movimiento de suelo normal, el joint capea la distancia
+        bool balanceando = isHanging && (!isGrounded || grapple.IsClimbing);
+
         // Movimiento horizontal
-        if (isHanging)
+        if (balanceando)
         {
             // Fuerza tangencial al péndulo
             Vector2 anchorPos = grapple.joint.connectedAnchor;
@@ -245,7 +257,7 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // Gravedad
-        if (isHanging)
+        if (balanceando)
         {
             rb.gravityScale = swingGravityScale;
         }

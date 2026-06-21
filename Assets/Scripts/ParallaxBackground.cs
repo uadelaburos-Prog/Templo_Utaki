@@ -5,6 +5,12 @@ using UnityEngine;
 // factorX  0 = capa fija en mundo (scrollea a velocidad de cámara, capa más cercana)
 //          1 = capa sigue exacto a la cámara (aparece estática, capa más lejana / cielo)
 // Los sprites deben ser lo suficientemente anchos para cubrir el nivel completo.
+//
+// DefaultExecutionOrder(1000): debe correr DESPUÉS de CamaraScript (orden 0), que mueve la
+// cámara con Lerp en LateUpdate. Así el fondo lee la posición YA actualizada de la cámara
+// (no la del frame anterior) y evita el temblor; además Start() captura _camStart después
+// del SnapToPlayer inicial de la cámara.
+[DefaultExecutionOrder(1000)]
 public class ParallaxBackground : MonoBehaviour
 {
     [System.Serializable]

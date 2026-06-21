@@ -9,13 +9,22 @@ public class MenuManager : MonoBehaviour
 
     [Header("Transición")]
     [SerializeField] private CanvasGroup fadePanel;
-    [SerializeField] private float       tiempoFade = 0.4f;
+    [SerializeField] private float tiempoFade = 0.4f;
 
     // ── Botones ───────────────────────────────────────────────────
 
     public void IniciarJuego()
     {
         StartCoroutine(CargarEscena(1));
+    }
+
+    /// <summary>
+    /// Carga un nivel específico pasando su índice de Build Settings.
+    /// Ideal para usar con botones de selección de nivel en el Inspector.
+    /// </summary>
+    public void IrANivel(int indice)
+    {
+        StartCoroutine(CargarEscena(indice));
     }
 
     public void AbrirOpciones()

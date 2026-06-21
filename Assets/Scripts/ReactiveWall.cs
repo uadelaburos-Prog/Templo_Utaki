@@ -8,7 +8,7 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
 [RequireComponent(typeof(SpriteRenderer))]
-public class ReactiveWall : MonoBehaviour
+public class ReactiveWall : MonoBehaviour, IHookable
 {
     [Header("Visual")]
     [Tooltip("Sprite de la pared. Si se deja vacío se genera un placeholder marrón.")]

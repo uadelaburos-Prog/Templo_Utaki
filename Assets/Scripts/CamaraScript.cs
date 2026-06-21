@@ -42,11 +42,8 @@ public class CamaraScript : MonoBehaviour
     private float _currentTerrainOffset;
     private float _inputHorizontal;
 
-    // Bounds activos — se snapean inmediatamente al cambiar de zona.
-    // La suavidad de la transición la da el lerp de POSICIÓN de la cámara, no el lerp de bounds.
     private float _activeMinX, _activeMaxX, _activeMinY, _activeMaxY;
 
-    private CameraZone[] _allZones;
     private CameraZone _currentZone;
 
     private void Awake()
@@ -63,16 +60,36 @@ public class CamaraScript : MonoBehaviour
         _activeMinX = minX; _activeMaxX = maxX;
         _activeMinY = minY; _activeMaxY = maxY;
 
-        _allZones = FindObjectsByType<CameraZone>(FindObjectsSortMode.None);
+        // Detectar zona inicial (OnTriggerEnter2D no dispara para solapamientos previos al Enable).
+        // Entre varias zonas solapadas al inicio, activa la de menor área.
+        CameraZone startZone  = null;
+        float       smallestA = float.MaxValue;
+        foreach (CameraZone z in FindObjectsByType<CameraZone>(FindObjectsSortMode.None))
+        {
+            if (z.Contains(player.position) && z.Area < smallestA)
+            {
+                smallestA = z.Area;
+                startZone = z;
+            }
+        }
+        if (startZone != null) EnterZone(startZone);
+
         SnapToPlayer();
     }
 
-    // Teletransporta la cámara al jugador sin lerp — llamar al spawnear o al hacer respawn
+    // Llamado por CameraZone.OnTriggerEnter2D. La zona más reciente siempre tiene prioridad.
+    public void EnterZone(CameraZone zone)
+    {
+        if (zone == _currentZone) return;
+        _currentZone = zone;
+        _activeMinX = zone.MinX; _activeMaxX = zone.MaxX;
+        _activeMinY = zone.MinY; _activeMaxY = zone.MaxY;
+    }
+
+    // Teletransporta la cámara al jugador sin lerp — llamar al spawnear o al hacer respawn.
     public void SnapToPlayer()
     {
         if (player == null || cam == null) return;
-
-        UpdateActiveZone();
 
         currentLookBehind     = 0f;
         currentLookDown       = 0f;
@@ -92,6 +109,7 @@ public class CamaraScript : MonoBehaviour
             float cMinY = _activeMinY + halfH, cMaxY = _activeMaxY - halfH;
             if (cMaxX > cMinX) snapPos.x = Mathf.Clamp(snapPos.x, cMinX, cMaxX);
             if (cMaxY > cMinY) snapPos.y = Mathf.Clamp(snapPos.y, cMinY, cMaxY);
+            else                snapPos.y = (_activeMinY + _activeMaxY) * 0.5f;
         }
 
         transform.position = snapPos;
@@ -104,8 +122,6 @@ public class CamaraScript : MonoBehaviour
 
     private void LateUpdate()
     {
-        UpdateActiveZone();
-
         float targetLookBehind = _inputHorizontal * lookBehindDistance;
         currentLookBehind = Mathf.Lerp(currentLookBehind, targetLookBehind, lookBehindSpeed * Time.deltaTime);
 
@@ -139,43 +155,14 @@ public class CamaraScript : MonoBehaviour
             float cMinX = _activeMinX + halfW, cMaxX = _activeMaxX - halfW;
             float cMinY = _activeMinY + halfH, cMaxY = _activeMaxY - halfH;
 
-            // Solo clampear si el rango es válido (zona más grande que la vista de cámara)
             if (cMaxX > cMinX) newPos.x = Mathf.Clamp(newPos.x, cMinX, cMaxX);
             if (cMaxY > cMinY) newPos.y = Mathf.Clamp(newPos.y, cMinY, cMaxY);
+            else newPos.y = Mathf.Lerp(transform.position.y, (_activeMinY + _activeMaxY) * 0.5f, camSpeed * 4f * Time.deltaTime);
         }
 
         transform.position = newPos;
     }
 
-    private void UpdateActiveZone()
-    {
-        CameraZone best = null;
-        float smallestArea = float.MaxValue;
-
-        foreach (CameraZone z in _allZones)
-        {
-            if (z.Contains(player.position) && z.Area < smallestArea)
-            {
-                smallestArea = z.Area;
-                best = z;
-            }
-        }
-
-        if (best == _currentZone) return;
-        _currentZone = best;
-
-        // Snap inmediato — el lerp de posición de la cámara ya suaviza la transición visual
-        if (best != null)
-        {
-            _activeMinX = best.MinX; _activeMaxX = best.MaxX;
-            _activeMinY = best.MinY; _activeMaxY = best.MaxY;
-        }
-        else
-        {
-            _activeMinX = minX; _activeMaxX = maxX;
-            _activeMinY = minY; _activeMaxY = maxY;
-        }
-    }
 
 #if UNITY_EDITOR
     private void OnDrawGizmos()
