@@ -31,3 +31,11 @@ sysinfo.txt
 CLAUDE.md
 SESION.md
 .claude/settings.local.json
+.claude/projects/
+
+# Tooling local Claude/Unity bridge (no versionar)
+Assets/LLM/
+Assets/LLM.meta
+Assets/Editor/BridgeScratch.cs
+Assets/Editor/BridgeScratch.cs.meta
+unity-cmd.ps1

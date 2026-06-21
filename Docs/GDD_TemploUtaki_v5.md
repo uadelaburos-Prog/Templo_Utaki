@@ -8,7 +8,7 @@
 
 | **Estudio** | **Demonic Arts Company** |
 | --- | --- |
-| Versión | v5.3 — Junio 2026  ·  SpectralPatrollerAI  ·  Checkpoints  ·  BreakableAnchor  ·  MenuManager  ·  SpotlightOverlay |
+| Versión | v5.4 — Junio 2026  ·  MummyAI (rebote + salto + línea de visión)  ·  LauncherAI/Projectile/KeyItem/KeyDoor implementados  ·  Sincronización de parámetros con build main |
 | Motor | Unity 6000.0.30f1 — URP 2D |
 | Plataforma | PC (escalable a consolas) |
 | Duración estimada | 20–30 minutos |
@@ -441,7 +441,7 @@ Espíritu guerrero de un antiguo guardián del templo. Semitransparente, con toc
 
 **Comportamiento general**
 
-El Espectral no persigue al jugador en línea recta. En lugar de eso, orbita alrededor del jugador describiendo una elipse dinámica, evaluando constantemente el momento de atacar. Cuando el jugador permanece quieto durante un intervalo sostenido, el Espectral telegrafía un dash con un parpadeo blanco breve y se lanza en línea recta. Si impacta una pared rúnica durante el dash, se detiene inmediatamente.
+El Espectral no persigue al jugador en línea recta. En lugar de eso, merodea a su alrededor con un movimiento orgánico: combina una componente tangencial (girar en torno al jugador, en sentido elegido al azar en cada encuentro) con un resorte radial suave que cierra distancia de a poco hasta una distancia mínima "respirante" (oscila sinusoidalmente). No describe un círculo rígido — se ve natural y evita pegarse al jugador. Cuando el jugador permanece quieto durante un intervalo sostenido **y** el Espectral ya está suficientemente cerca, telegrafía un dash con un parpadeo blanco breve y se lanza en línea recta hacia la posición del jugador. Si impacta una pared rúnica (capa SpectralWall) durante el dash, se detiene inmediatamente.
 
 **Máquina de Estados**
 
@@ -451,10 +451,10 @@ El Espectral no persigue al jugador en línea recta. En lugar de eso, orbita alr
 | --- | --- | --- |
 | PATRULLA | Estado inicial / tras perder al jugador | Recorre su ruta entre dos puntos predefinidos. Si detecta al jugador, entra en Orbita. |
 | IDLE | Al llegar al extremo de su ruta | Pausa breve antes de invertir dirección. |
-| ORBITA | Jugador detectado | Describe una elipse dinámica alrededor del jugador, sin atacar. Espera que el jugador se detenga. |
-| WINDUP | Jugador quieto un tiempo sostenido | Telegraph de ataque: retrocede levemente y parpadea en blanco. Señal visible para el jugador. |
-| DASH | Tras completar el Windup | Se lanza en línea recta a alta velocidad hacia donde estaba el jugador al inicio del Windup. Un rastro visual marca su trayectoria. |
-| RECOVER | Tras completar el Dash o impactar una pared rúnica | Pausa breve antes de volver a orbitar o retirarse. |
+| ORBITA | Jugador detectado | Merodeo orgánico alrededor del jugador (tangencial + resorte radial), sin atacar. Espera que el jugador se detenga y estar a tiro (≤ dashTriggerRange). |
+| WINDUP | Jugador quieto un tiempo sostenido y dentro de dashTriggerRange | Telegraph de ataque (0.35s): retrocede levemente y parpadea en blanco. Señal visible para el jugador. |
+| DASH | Tras completar el Windup | Se lanza en línea recta a alta velocidad hacia la posición del jugador, con overshoot. Un rastro visual (AfterimageTrail) marca su trayectoria. |
+| RECOVER | Tras completar el Dash o impactar una pared rúnica | Pausa breve (0.4s) + cooldown antes de volver a orbitar o retirarse. |
 | REGRESO | Jugador fuera de rango | Vuelve a su punto de patrulla. |
 | MUERTO | Contacto con fuego | Desintegración inmediata. Suelta la llave si la portaba. |
 
@@ -503,11 +503,17 @@ Por su naturaleza física, la Momia es vulnerable a todas las trampas ambientale
 
 **Comportamiento — Traversal**
 
-**—  **Tiene las mismas limitaciones de movimiento que el jugador: no atraviesa paredes, no cae de plataformas voluntariamente. Su IA no evalúa abismos más allá de los bordes de su ruta de patrulla predefinida.
+**—  **Es totalmente física (Rigidbody2D Dynamic, gravedad). Tiene las mismas limitaciones de movimiento que el jugador: no atraviesa paredes, no cae de plataformas voluntariamente durante la patrulla.
 
-**—  **Puede caer al vacío si el entorno bajo sus pies desaparece: si patrulla sobre una plataforma frágil y el jugador la activa pisándola primero, la plataforma cede y la Momia cae con ella.
+**—  **Patrulla por rebote — sin waypoints: camina en su dirección inicial hasta detectar (con raycasts) un borde de plataforma o una pared insuperable, y entonces gira. No usa puntos A/B predefinidos.
 
-**—  **Puede caer si patrulla sobre una plataforma de tracción que el jugador arrastra fuera de su posición con el gancho, dejándola sin suelo.
+**—  **Salta paredes superables: si detecta una pared adelante pero está despejada por encima de `jumpClearanceHeight`, salta para superarla en lugar de girar. Durante la persecución también salta si el jugador está bastante más arriba (`alturaSaltoPersecucion`), aunque no haya pared.
+
+**—  **Detección con línea de visión: solo entra en persecución si el jugador está dentro del radio de detección **y** hay línea de visión despejada — un Linecast contra paredes/suelo (`maskVisionBloqueo`) bloquea la detección. No detecta al jugador a través de muros ni del piso.
+
+**—  **En persecución es "más tonta": no respeta los bordes y puede caer al vacío persiguiendo al jugador. No empuja contra paredes que no puede superar (evita el wall-stick), pero sigue saltando para intentar alcanzarlo.
+
+**—  **Puede caer al vacío si el entorno bajo sus pies desaparece: si patrulla sobre una plataforma frágil y el jugador la activa pisándola primero, la plataforma cede y la Momia cae con ella. Igual con una plataforma de tracción arrastrada con el gancho fuera de su posición.
 
 **—  **Muere al contacto con: fuego, pinchos (estáticos o retráctiles en estado activo), roca cayente, caída al vacío.
 
@@ -517,14 +523,14 @@ Por su naturaleza física, la Momia es vulnerable a todas las trampas ambientale
 
 *Figura 3 — Máquina de estados de la Momia del Templo*
 
+La Momia (`MummyAI.cs`) usa cuatro estados: Idle, Patrulla, Persecución y Muerto. No tiene estados Alerta ni Regreso separados — la persecución arranca directamente al detectar (con línea de visión) y termina por distancia.
+
 | **Estado** | **Transición** | **Qué hace** |
 | --- | --- | --- |
-| IDLE | Llega al extremo de ruta → gira | Detenido. Duración: 0.5–1s. Polvo cayendo. |
-| PATRULLA | Detecta jugador → ALERTA | Se mueve a 2 u/s. Respeta geometría del nivel. No cae de plataformas. |
-| ALERTA | 0.3s → PERSECUCIÓN | Detectó al jugador. Muestra «!». Pausa 0.3s. |
-| PERSECUCIÓN | Sale de radio ×1.5 → REGRESO | Se mueve a 4 u/s siguiendo geometría. No puede cruzar abismos salvo que haya plataforma. |
-| REGRESO | Llega al punto → PATRULLA | Vuelve al punto de patrulla más cercano a 3 u/s. |
-| MUERTO | — | Contacto con trampa ambiental. Animación de colapso. Suelta la llave si la portaba. |
+| IDLE | Pausa de giro (duracionIdle 0.4s) → PATRULLA · Detecta jugador → PERSECUCIÓN | Detenido brevemente al girar en un borde o pared. Polvo cayendo. |
+| PATRULLA | Borde/pared insuperable → gira (IDLE) · Detecta jugador (radio + línea de visión) → PERSECUCIÓN | Se mueve a 2 u/s por rebote. Respeta bordes y paredes. Salta paredes superables. Muestra «!» al detectar. |
+| PERSECUCIÓN | Jugador supera radioAbandonar (7u) → PATRULLA | Se mueve a 3.5 u/s hacia el jugador. No respeta bordes (puede caer). Salta paredes superables y salta si el jugador está más arriba. |
+| MUERTO | Contacto con trampa ambiental | Animación de colapso (Dead). Suelta la llave si la portaba. Collider y físicas desactivados de inmediato. |
 
 **Eliminación Ambiental**
 
@@ -985,7 +991,8 @@ Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al en
 | --- | --- | --- |
 | PlayerMovement.cs | Movimiento horizontal, salto, gravedad variable (rise/fall/swing scale), coyote time, jump cut, air accel/decel, detección de suelo (rb.GetContacts con groundNormalThreshold), SFX salto y aterrizaje. | ✅ Implementado |
 | GrappleScript.cs | Ciclo de estados del gancho, sistema de carga (chargeTimer), ajuste de longitud de soga (W/S), raycast, snap automático, LineRenderer (Bezier), anclaje reactivo (ReactiveWall.OnHooked), retracción de objetos, highlight de superficies grappleables. Llama OnHooked() en BreakableAnchor al engancharse. | ✅ Implementado |
-| PatrollerAI.cs | Máquina de estados de la Momia: idle, patrulla, persecución, regreso. Ícono «!» con animación SmoothStep. SFX alerta. Muerte por contacto vía GameLoopManager. | ✅ Implementado |
+| MummyAI.cs | Momia del Templo. Máquina de estados: Idle, Patrulla, Persecución, Muerto. Patrulla por rebote (sin waypoints) con raycasts de borde y pared. Salta paredes superables y salta en persecución si el jugador está más arriba. Detección con línea de visión (Linecast contra maskVisionBloqueo — no detecta a través de paredes/suelo). Ícono «!». SFX alerta. Suelta llave (KeyCarrier) al morir. Muerte vía GameLoopManager. | ✅ Implementado |
+| PatrollerAI.cs | Patrullero físico genérico (base histórica). Estados Idle, Patrulla, Persecución, Regreso con waypoints PuntoA/PuntoB. Velocidades 2/4/3 u/s. No usado por la Momia actual (la reemplaza MummyAI.cs). | ✅ Implementado (legacy) |
 | MovingPlatform.cs | Plataforma móvil con herencia de velocidad al jugador. Movimiento vía Lerp lineal con rebote. | ✅ Implementado |
 | FragilePlatform.cs | Plataforma frágil: timer de rotura, 3 fases visuales (amarillo→naranja→rojo), regeneración, SFX crujido y rotura. | ✅ Implementado |
 | OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo. | ✅ Implementado |
@@ -997,14 +1004,27 @@ Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al en
 | CrystalPickup.cs | Trigger de recolección, comunicación con GameLoopManager. | ✅ Implementado |
 | HazardFire.cs | Zona de fuego: mata Player (fromVoid=false) + llama SpectralPatrollerAI.Morir() y PatrollerAI.Morir(). | ✅ Implementado |
 | ReactiveWall.cs | Pared reactiva al gancho. Animación de rotación de caída. Al finalizar Derribo() pasa a RigidbodyType2D.Static — queda como puente sólido permanente. OnHooked/OnReleased. | ✅ Implementado |
-| SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: patrulla, órbita elíptica dinámica (3u ± 0.4u sinusoidal, 1.5 rad/s), windup con parpadeo blanco (0.35s), dash (18 u/s, 8u), recover. AfterimageTrail durante dash. isTrigger forzado en Awake. Muerte por HazardFire (tag SpectralEnemy). | ✅ Implementado |
+| SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: patrulla (waypoints A/B), idle, regreso, órbita orgánica (tangencial + resorte radial; orbitRadius 3u ± 0.4u sinusoidal, orbitVelocity 1.5 rad/s), windup con parpadeo blanco (0.35s), dash (18 u/s, 8u, cooldown 2s, dashTriggerRange 3.5u, playerStillTime 1.5s), recover (0.4s). Detección radio 6u / abandono 8.5u. AfterimageTrail durante dash. isTrigger forzado en Awake. Bloqueado solo por SpectralWall. Muerte por HazardFire (tag SpectralEnemy). | ✅ Implementado |
 | CheckpointZone.cs | Objeto en escena (trigger one-shot). Al entrar el jugador: llama GameLoopManager.GuardarCheckpoint(). Restaura estado visual del animator al recargar (tolerancia 0.1u). SFX de activación. | ✅ Implementado |
 | BreakableAnchor.cs | Superficie grappleable destructible. Se activa mediante OnHooked(GrappleScript) al engancharse. Tres fases de advertencia visual antes de la rotura. El gancho se retrae automáticamente al romperse. Parámetros: permanentBreak (bool), regenDelay (float, default 5s). | ✅ Implementado |
 | MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego(), Salir(), AbrirOpciones(), CerrarOpciones(). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime) + AudioManager.StopMusic(). | ✅ Implementado |
-| KeyDoor.cs | Vínculo llave-puerta. Detección de proximidad del jugador con llave. Animación de apertura: 5 frames con desplazamiento ascendente (altoPuerta / (frames-1) por frame). Collider desactivado al comenzar la animación. | 📋 Planeado |
-| KeyItem.cs | Física de la llave, recolección por proximidad o gancho, lanzamiento con sistema de carga, respawn al caer al void. | 📋 Planeado |
-| LauncherAI.cs | Timer de disparo, instanciación de proyectil, dirección fija. | 📋 Planeado |
-| Projectile.cs | Movimiento del proyectil, detección de impacto (jugador y Momia), destrucción por tiempo o borde. | 📋 Planeado |
+| KeyDoor.cs | Vínculo llave-puerta. Detección de proximidad del jugador con llave (radioApertura 2u). Animación de apertura por frames con desplazamiento ascendente (duracionFrame 0.08s). Collider desactivado al comenzar la animación. | ✅ Implementado |
+| KeyItem.cs | Física de la llave, recolección por proximidad (radioPickup 0.8u) o gancho, lanzamiento con sistema de carga (velocidadMin 6 / velocidadMax 20, maxCargaTiempo 1.5s), rozamiento en suelo, respawn al caer al void, cooldown de recogida 0.5s. | ✅ Implementado |
+| KeyCarrier.cs | Componente para enemigos que portan una llave. SoltarLlave() la deja caer con física en el punto de muerte. offsetPortada configurable. | ✅ Implementado |
+| LauncherAI.cs | Timer de disparo (cadencia 2.5s), instanciación de proyectil, dirección de disparo fija configurable. | ✅ Implementado |
+| Projectile.cs | Movimiento del proyectil (velocidad 8 u/s), detección de impacto (jugador y Momia), destrucción por tiempo (tiempoVida 10s) o borde. | ✅ Implementado |
+| LevelExit.cs | Trigger de fin de nivel → NivelCompleto(). | ✅ Implementado |
+| CrystalPickup.cs | Recolección por proximidad (pickupRadius 0.6u), flotación + rotación visual, comunicación con GameLoopManager. | ✅ Implementado |
+| OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo, bajar con S/↓ (duracionBajar 0.3s). | ✅ Implementado |
+| SpikeHazard.cs / SpikeGroup.cs | Pinchos estáticos y retráctiles (3 fases: Retraído / Asomando sin daño / Desplegado). DireccionSalida enum. SpikeGroup orquesta grupos con ModoCiclo (Sincronizado / Desfasado / Secuencial, delayEntreSpikes 0.15s). | ✅ Implementado |
+| HazardFire.cs | Zona/llamarada de fuego con ciclo configurable (inactivo/creciendo/activo/menguando). Mata Player y elimina Espectral (SpectralPatrollerAI) y Momia (MummyAI/PatrollerAI). | ✅ Implementado |
+| Lever.cs | Palanca/switch: alterna estado ON/OFF de objeto vinculado por contacto. | ✅ Implementado |
+| ReactiveWall.cs | Pared reactiva al gancho. Cae al superar distanciaDerribo (1.5u), animación de rotación (angulosCaida 90°, duracionCaida 0.4s). Al terminar pasa a RigidbodyType2D.Static (puente sólido). IHookable. | ✅ Implementado |
+| BreakableAnchor.cs | Anclaje grappleable destructible. OnHooked() dispara la rotura (breakDelay 0.6s, 3 fases). Retracción automática del gancho al romperse. permanentBreak o regenDelay 5s. | ✅ Implementado |
+| SpotlightOverlay.cs | Efecto de muerte dramática (shader Custom/SpotlightOverlay): radius 0.18, softness 0.10, maxAlpha 0.92. Hijo del GameLoopManager. | ✅ Implementado |
+| CameraZone.cs | Zonas que ajustan los límites de cámara al entrar (extLeft/Right/Bottom/Top, transitionSpeed). | ✅ Implementado |
+| ParallaxBackground.cs | Desplazamiento parallax de capas de fondo según la cámara. | ✅ Implementado |
+| IHookable.cs | Interfaz para objetos interactuables por gancho (OnHooked/OnReleased). Implementada por ReactiveWall y BreakableAnchor. | ✅ Implementado |
 | GolemBoss.cs | Máquina de estados del Jefe Final, fases, patrones de ataque, condición de victoria. | 📋 Planeado |
 
 **11.2 Sistema de Capas y Tags (Unity)**
@@ -1041,15 +1061,15 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | Velocidad de carrera | 9 u/s | SerializeField en PlayerMovement.cs |
 | Velocidad de salto | 12 u/s | SerializeField en PlayerMovement.cs |
 | Coyote time | 0.12s | SerializeField en PlayerMovement.cs |
-| Input buffer | 0.15s | SerializeField en PlayerMovement.cs |
+| Salto en cola (jumpQueued) | Hasta aterrizar | PlayerMovement.cs — no es ventana de 0.15s; se mantiene sin expirar hasta tocar suelo |
 | Tiempo mín. de carga | 0.1s | SerializeField en GrappleScript.cs |
 | Tiempo máx. de carga | 1.5s | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 1.0s) |
 | Alcance mínimo | 3 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 5u) |
 | Alcance máximo | 10 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 15u) |
 | Radio de snap | 0.4 u | SerializeField en GrappleScript.cs — ⚠️ Auditado (era 1.5u) |
 | Cooldown de fallo | 0.3s | SerializeField en GrappleScript.cs |
-| Velocidad proyectil Lanzador | 8 u/s | SerializeField en LauncherAI.cs |
-| Cadencia de disparo | 2–3s | SerializeField en LauncherAI.cs |
+| Velocidad proyectil Lanzador | 8 u/s | SerializeField en Projectile.cs |
+| Cadencia de disparo | 2.5s | SerializeField en LauncherAI.cs |
 
 **12.  ****EQUIPO DE DESARROLLO**
 
@@ -1092,7 +1112,7 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | Puerta de llave | Puerta que requiere una llave vinculada para abrirse. Se abre por proximidad al sostener la llave correspondiente. |
 | Friendly fire ambiental | Situación en la que el proyectil del Lanzador elimina a una Momia del Templo por interposición del jugador. |
 | Coyote Time | Ventana de 0.12s después de salir de un borde en la que el jugador aún puede saltar. |
-| Input Buffer | El juego recuerda el input de salto por 0.15s. Si el jugador aterriza en ese tiempo, el salto se ejecuta. |
+| Input Buffer / jumpQueued | El juego recuerda el input de salto hasta aterrizar. Implementación real: jumpQueued se anota al presionar Espacio y se mantiene sin expirar hasta tocar suelo (no es una ventana temporizada de 0.15s como decían versiones previas). Si el jugador aterriza con el salto en cola, este se ejecuta. |
 | Jump Cut | Al soltar el botón de salto antes del apex, la velocidad vertical se reduce a ×0.5. La altura del salto varía según cuánto tiempo se mantiene el botón presionado, no según la velocidad horizontal previa. La distancia horizontal en el aire depende de la velocidad de movimiento al momento del salto, pero no es un requisito: el salto tiene impulso propio independiente de si el jugador venía corriendo o parado. |
 | Hang Time | Gravedad reducida en el apex del salto para dar mayor sensación de control. |
 | Grappleable | Capa de Unity asignada a superficies donde el gancho puede engancharse para balancearse. El jugador se cuelga de ellas y oscila como péndulo. |
@@ -1111,7 +1131,10 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | fromVoid | Parámetro booleano de PlayerDied(). True = muerte por vacío (reinicio inmediato, sin animación). False = muerte por hazard (secuencia dramática con SpotlightOverlay). |
 | isDying | Flag en GameLoopManager que previene múltiples rutinas de muerte simultáneas (ej: pincho + vacío en el mismo frame). El primer llamado entra; los siguientes retornan inmediatamente. Se resetea en OnSceneLoaded. |
 | UnscaledTime | Tiempo de Unity no afectado por Time.timeScale. Permite reproducir animaciones y corrutinas mientras el juego está pausado (timeScale = 0). Usado por la animación Death y el fade del SpotlightOverlay. |
-| Ground Normal Threshold | Umbral de ángulo (0.7 por defecto ≈ 45°) para determinar si una superficie cuenta como suelo en isGrounded. Usa rb.GetContacts con filtro de normal Y. Evita que paredes verticales sean detectadas como suelo. Rango: 0.5–1.0. |
+| Ground Normal Threshold | Umbral de normal Y (0.5 por defecto ≈ 60°) para determinar si una superficie cuenta como suelo en isGrounded. Usa rb.GetContacts con filtro de normal Y. Evita que paredes verticales sean detectadas como suelo. Rango: 0.5–1.0. |
+| Línea de visión (Momia) | La Momia (MummyAI.cs) solo detecta al jugador si, además de estar en el radio, hay línea de visión despejada: un Physics2D.Linecast contra maskVisionBloqueo (paredes/suelo) bloquea la detección. Evita que detecte al jugador a través de muros o del piso. Si maskVisionBloqueo está vacío, usa maskSuelo. |
+| Patrulla por rebote | Modo de patrulla sin waypoints: el enemigo (Momia) camina en una dirección hasta detectar un borde o una pared insuperable con raycasts, y entonces gira. Reemplaza el esquema PuntoA/PuntoB del PatrollerAI legacy. |
+| Órbita orgánica | Movimiento del Guerrero Espectral alrededor del jugador combinando una componente tangencial (giro) con un resorte radial suave (acercamiento gradual hasta orbitRadius). No es un círculo ni elipse rígidos. |
 
 ***PARTE II  (cont.)***
 
@@ -1135,7 +1158,7 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-002** | **Salto base** | El jugador salta al presionar ESPACIO. Velocidad vertical inicial fija. | Movimiento | *Vel. vertical: 12 u/s. Altura: 5–6 u.* |
 | **F-003** | **Jump Cut** | Al soltar ESPACIO antes del apex, la velocidad vertical se reduce a ×0.5. | Movimiento | *Ver PlayerMovement.cs — pendiente implementar.* |
 | **F-004** | **Coyote Time** | Ventana de 0.12s tras salir de un borde donde el salto sigue siendo válido. | Movimiento | *Ausente en Prototipo.* |
-| **F-005** | **Input Buffer** | El juego recuerda el input de salto por 0.15s. Si el jugador aterriza en ese tiempo, el salto se ejecuta. | Movimiento |  |
+| **F-005** | **Salto en cola (jumpQueued)** | El juego recuerda el input de salto hasta aterrizar. Implementación real: jumpQueued se mantiene sin expirar hasta tocar suelo (no una ventana de 0.15s). | Movimiento | *PlayerMovement.cs — ⚠️ Auditado: no es buffer temporizado.* |
 | **F-006** | **Hang Time** | Gravedad reducida en el apex del salto para mayor sensación de control. | Movimiento | *Parámetro ajustable desde Inspector.* |
 | **F-007** | **Control en el aire** | El jugador tiene influencia mínima sobre su trayectoria en el aire. | Movimiento | *No full-air-control.* |
 | **F-008** | **Detección de suelo (isGrounded)** | Detecta si el jugador está en contacto con el suelo para habilitar salto y fricción. | Movimiento | *rb.GetContacts con filtro de normal Y ≥ groundNormalThreshold (0.7 ≈ 45°). Cero allocations por frame. Reemplaza Physics2D.OverlapBox que detectaba paredes verticales como suelo.* |
@@ -1143,10 +1166,10 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-010** | **Fricción de suelo al aterrizar** | Al aterrizar, la fricción reduce la velocidad horizontal del jugador. | Movimiento | *Fricción: 0.6.* |
 | **▌ GANCHO** |
 | **F-011** | **Apuntado con ratón** | El cursor determina la dirección de lanzamiento del gancho en todo momento. | Gancho | *Input lag **<** 50ms.* |
-| **F-012** | **Sistema de carga del gancho** | Mantener Click izquierdo carga el gancho. Fuerza y alcance escalan con el tiempo de carga. Soltar dispara. | Gancho | *Carga mín: 0.1s → 5u. Carga máx: 1s → 15u. Escala lineal.* |
+| **F-012** | **Sistema de carga del gancho** | Mantener Click izquierdo carga el gancho. Fuerza y alcance escalan con el tiempo de carga. Soltar dispara. | Gancho | *⚠️ Auditado: alcance 3u→10u, carga máx 1.5s. Escala lineal.* |
 | **F-013** | **Ícono de carga junto al personaje** | Mientras se mantiene Click, aparece un ícono junto al personaje que se llena progresivamente. Placeholder: barra. | Gancho | *Arte define ícono definitivo.* |
-| **F-014** | **Lanzamiento del gancho** | Al soltar Click, el gancho se dispara en dirección al cursor con la fuerza y alcance acumulados. | Gancho | *Arco con gravedad. Actualmente recto — bug conocido.* |
-| **F-015** | **Snap automático al anclaje** | Si hay superficie grappleable en el radio de impacto (proporcional a la carga), el gancho se engancha al punto válido más cercano. | Gancho | *Radio base: 1.5u. isGrappling prematuro — ver GrappleScript.cs.* |
+| **F-014** | **Lanzamiento del gancho** | Al soltar Click, el gancho se dispara en dirección al cursor con la fuerza y alcance acumulados. | Gancho | *launchSpeed 20 u/s. Arco con gravedad (hookGravity 18). maxFlightTime 0.6s.* |
+| **F-015** | **Snap automático al anclaje** | Si hay superficie grappleable en el radio de impacto, el gancho se engancha al punto válido más cercano. | Gancho | *snapRadius 0.4u.* |
 | **F-016** | **Retracción por superficie inválida** | Si el gancho impacta superficie no grappleable, regresa al jugador con animación de retracción completa. | Gancho | *Cooldown 0.3s.* |
 | **F-017** | **Física de péndulo (balanceo)** | Una vez enganchado, el jugador oscila por gravedad pura sin fuerza adicional. | Gancho | *DistanceJoint2D. GrappleSwing usa AddForce — pendiente corregir.* |
 | **F-018** | **Soltar gancho** | Al soltar Click estando enganchado, el gancho se libera y el jugador conserva la velocidad acumulada. | Gancho | *Conservación de momentum al soltar.* |
@@ -1176,11 +1199,11 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-041** | **Anclaje reactivo** | Al tirar, activa un efecto en el objeto. | Entorno |  |
 | **F-042** | **Puerta de salida** | Trigger de fin de nivel. Se abre al llegar el jugador. | Entorno | *Comunica con LevelManager.* |
 | **▌ ENEMIGOS** |
-| **F-043** | **Patrullero — Patrulla** | Movimiento a 2 u/s en área rectangular. No cae de plataformas. | Enemigos | *PatrollerAI.cs.* |
-| **F-044** | **Patrullero — Detección** | Radio 5u. Al detectar: ALERTA con pausa 0.3s y «!». | Enemigos |  |
-| **F-045** | **Patrullero — Persecución** | 4 u/s hacia el jugador. Al salir de radio ×1.5 → REGRESO. | Enemigos |  |
-| **F-046** | **Patrullero — Regreso** | Vuelve al punto de patrulla más cercano a 3 u/s. | Enemigos |  |
-| **F-047** | **Patrullero — Daño** | Contacto = reinicio. Sin hitbox de ataque. | Enemigos |  |
+| **F-043** | **Momia — Patrulla** | Patrulla por rebote a 2 u/s (sin waypoints): camina hasta un borde o pared insuperable y gira. Salta paredes superables. | Enemigos | *MummyAI.cs. PatrollerAI.cs queda como patrullero genérico legacy.* |
+| **F-044** | **Momia — Detección** | Radio 5u **+ línea de visión** (Linecast contra maskVisionBloqueo): no detecta a través de paredes/suelo. Al detectar muestra «!» y persigue directo (sin estado ALERTA). | Enemigos | *⚠️ Nuevo: detección por línea de visión.* |
+| **F-045** | **Momia — Persecución** | 3.5 u/s hacia el jugador. No respeta bordes (puede caer). Salta paredes superables y si el jugador está más arriba. Abandona al superar radioAbandonar (7u). | Enemigos |  |
+| **F-046** | **Momia — Salto** | fuerzaSalto 8, jumpCooldown 0.6s. Supera paredes despejadas por encima de jumpClearanceHeight (1.0u). | Enemigos | *Detección de pared/borde con raycasts.* |
+| **F-047** | **Patrullero — Daño** | Contacto = reinicio. Sin hitbox de ataque. Suelta la llave (KeyCarrier) al morir. | Enemigos | *Momia y Espectral.* |
 | **F-048** | **Lanzador — Disparo fijo** | Proyectiles en dirección fija cada 2–3s. No apunta al jugador. | Enemigos | *LauncherAI.cs.* |
 | **F-049** | **Lanzador — Proyectil** | 8 u/s. Destruido al impactar, al contactar jugador o a los 10s. | Enemigos | *Projectile.cs. 8×8 px.* |
 | **F-050** | **Lanzador — Daño** | Contacto con Lanzador o proyectil = reinicio. | Enemigos | *Sin cooldown. Sin combate.* |
@@ -1220,6 +1243,24 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-080** | **Música — Jefe Final** | Pieza diferenciada. Más rítmica, mayor intensidad. | Audio |  |
 
 **Changelog del Registro**
+
+**Sesión 12***   Jun 2026  —  Auditoría de sincronización código↔GDD (v5.4)*
+
+**→  **Momia migrada a `MummyAI.cs` (F-043–F-047): patrulla por rebote sin waypoints, salto de paredes superables, persecución sin respetar bordes. El `PatrollerAI.cs` con waypoints queda como patrullero genérico legacy.
+
+**→  **Detección por línea de visión en la Momia (F-044): Linecast contra `maskVisionBloqueo` — ya no detecta al jugador a través de paredes ni del suelo. Gizmo de línea de visión (verde/rojo) en runtime.
+
+**→  **Guerrero Espectral (5.2, 15.4): corregido "elipse dinámica" → órbita orgánica (tangencial + resorte radial). Parámetros reales documentados: radio detección 6u, abandono 8.5u, orbitRadius 3u, dash 18u/s · 8u, cooldown 2s, dashTriggerRange 3.5u, quietud 1.5s, windup 0.35s.
+
+**→  **`LauncherAI`, `Projectile`, `KeyItem`, `KeyDoor`, `KeyCarrier` marcados como ✅ Implementados (estaban como 📋 Planeado). Añadidos a 11.1: `Lever`, `CameraZone`, `ParallaxBackground`, `LevelExit`, `SpotlightOverlay`, `IHookable`.
+
+**→  **Sección 15.2 (Gancho) reescrita con valores reales del build: carga máx 1.5s, alcance 3–10u, snap 0.4u, launchSpeed 20, hookGravity 18, retractSpeed 25, climbSpeed 6, minRopeLength 1, etc. (antes 0.1–1s / 5–15u / 1.5u).
+
+**→  **Sección 15.1: `groundNormalThreshold` corregido a 0.5 (era 0.7). Añadidos swingForce 15, ground check, deathAnimDuration. "Input buffer 0.15s" corregido — es `jumpQueued` sin expirar hasta aterrizar (F-005).
+
+**→  **Sección 15.3 ampliada: fase "Asomando" de pinchos (0.4s sin daño), parámetros de ReactiveWall (distanciaDerribo 1.5u, 90°/0.4s) y breakDelay de BreakableAnchor (0.6s). Cadencia del Lanzador precisada a 2.5s.
+
+**→  **Discrepancia de archivo: el CLAUDE.md apunta a `GDD_TemploUtaki_v4.5.md`; el archivo real es `Docs/GDD_TemploUtaki_v5.md`.
 
 **Sesión 11***   Jun 2026*
 
@@ -1289,67 +1330,114 @@ Esta sección es la fuente de verdad para todos los valores numéricos del juego
 | Escala de gravedad — caída | 3.5 | fallGravityScale = 3.5f | PlayerMovement.cs |
 | Velocidad máxima de caída | -20 u/s | maxFallSpeed = -20f | PlayerMovement.cs — ⚠️ Auditado |
 | Escala de gravedad — swing | 2.5 | swingGravityScale = 2.5f | PlayerMovement.cs |
-| Ground Normal Threshold | 0.7 (≈45°) | groundNormalThreshold = 0.7f | PlayerMovement.cs |
+| Fuerza de swing | 15 | swingForce = 15f | PlayerMovement.cs |
+| Ground Normal Threshold | 0.5 (≈60°) | groundNormalThreshold = 0.5f | PlayerMovement.cs — ⚠️ Auditado (GDD previo decía 0.7) |
+| Ancho ground check | 0.45 u | groundCheckWidth = 0.45f | PlayerMovement.cs |
+| Alto ground check | 0.05 u | groundCheckHeight = 0.05f | PlayerMovement.cs |
+| Duración anim. muerte | 1.5s | deathAnimDuration = 1.5f | PlayerMovement.cs |
 | CapsuleCollider | 0.5×1 u | — | (prefab Inspector) |
+
+**Salto en cola (jumpQueued):** el GDD anterior describía un "input buffer de 0.15s". El código real **no** usa una ventana temporizada: `jumpQueued` se anota al presionar Espacio (o si ya estaba presionado al soltar otra acción) y **se mantiene hasta aterrizar sin expirar**. En la práctica funciona como un buffer permanente hasta tocar suelo, no como un buffer de 0.15s. Ver Glosario y F-005.
 
 **15.2 Sistema del Gancho**
 
-| **Parámetro** | **Mín.** | **Máx.** | **Script** | **Notas** |
-| --- | --- | --- | --- | --- |
-| Tiempo de carga | 0.1s | 1.0s | GrappleScript.cs | Escala lineal. Sujeto a cambio en Alpha. |
-| Alcance del lanzamiento | 5 u | 15 u | GrappleScript.cs | Proporcional al tiempo de carga. |
-| Radio de snap | Proporcional | 1.5 u (máx.) | GrappleScript.cs | Nunca desaparece completamente. |
-| Cooldown por fallo | 0.3s | 0.3s | GrappleScript.cs | Fallo por alcance o superficie inválida. |
-| Longitud de soga — mínima | 2 u | — | GrappleScript.cs | Límite al acortar con W. |
-| Longitud de soga — máxima | — | 6 u | GrappleScript.cs | Límite al alargar con S. |
-| Velocidad de ajuste de soga | Configurable | — | GrappleScript.cs | u/s al presionar W o S. Pendiente de tuning. |
-| Segmentos LineRenderer | 20 | 20 | GrappleScript.cs | Curva Bezier cuadrática. |
+Sincronizado con `GrappleScript.cs` (build main). El GDD previo (carga 0.1–1.0s, alcance 5–15u, snap 1.5u) quedó obsoleto — estos son los valores reales.
+
+| **Parámetro** | **Valor** | **Variable** | **Notas** |
+| --- | --- | --- | --- |
+| Tiempo máx. de carga | 1.5s | maxChargeTime = 1.5f | Escala lineal del alcance. Sujeto a cambio en Alpha. |
+| Alcance mínimo | 3 u | minGrappleDistance = 3f | Carga mínima. |
+| Alcance máximo | 10 u | maxGrappleDistance = 10f | Carga máxima. |
+| Radio de snap | 0.4 u | snapRadius = 0.4f | Asistencia de enganche al punto válido más cercano. |
+| Velocidad de lanzamiento | 20 u/s | launchSpeed = 20f | Velocidad del gancho en vuelo. |
+| Gravedad del gancho en vuelo | 18 | hookGravity = 18f | Hace que el gancho describa un arco. |
+| Tiempo máx. de vuelo | 0.6s | maxFlightTime = 0.6f | Si no engancha, se retrae. |
+| Velocidad de retracción | 25 u/s | retractSpeed = 25f | Retracción normal al soltar. |
+| Velocidad de retracción por fallo | 8 u/s | failRetractSpeed = 8f | Retracción tras impacto inválido. |
+| Cooldown por fallo | 0.3s | failCooldown = 0.3f | Solo en fallo; soltar voluntario no tiene cooldown. |
+| Velocidad máx. de swing | 15 u/s | maxSwingVelocity = 15f | Tope de velocidad en el péndulo. |
+| Amortiguación de swing | 0.02 | swingDamping = 0.02f | Pérdida sutil de energía del péndulo. |
+| Velocidad de ajuste de soga (W/S) | 6 u/s | climbSpeed = 6f | Acortar (W) / alargar (S). |
+| Longitud mínima de soga | 1 u | minRopeLength = 1f | Límite al acortar con W. La máxima es la longitud al momento de enganchar (≤ alcance). |
+| Fuerza de retracción de objetos | 15 | grabForce = 15f | Para tirar de objetos Hookeables. |
+| Segmentos LineRenderer | 20 | segments = 20 | Curva Bezier cuadrática. |
+| Ancho de cuerda | 0.15 | ropeWidth = 0.15f | LineRenderer. |
+| Velocidad de enderezado de cuerda | 5 | straightenSpeed = 5f | Al tocar piso, la línea pasa de Bezier a recta. |
 
 **15.3 Plataformas**
 
 | **Plataforma / Parámetro** | **Valor** | **Notas** |
 | --- | --- | --- |
 | Estática — fricción | 0.6 | Control adecuado sin resbalar. |
-| Móvil — velocidad | 0.5–3 u/s | Configurable por nivel en el Inspector. |
-| Frágil — timer de rotura | 1–2s | Desde que el jugador la pisa. |
+| Móvil — velocidad | 2 u/s (default) | speed en MovingPlatform.cs. Recorrido por moveOffset (default 3,0) con Lerp lineal y rebote. |
+| Frágil — timer de rotura | 1.2s | breakDelay en FragilePlatform.cs (dividido en 2 fases iguales). |
+| Frágil — duración rompiéndose | 0.4s | breakingAnimDuration: sprite "Rompiéndose" antes de desaparecer. |
 | Frágil — fases de advertencia | 3 | Progresivas (color + grietas) hasta la rotura. |
-| Frágil — tiempo de regeneración | 5s | Después de romperse completamente. |
-| Pinchos retráctiles — ciclo activo | 1.5s | Configurable por nivel. |
-| Pinchos retráctiles — ciclo inactivo | 1.5s | Configurable por nivel. |
+| Frágil — tiempo de regeneración | 5s | regenDelay. Después de romperse completamente. |
+| Pinchos retráctiles — fase retraído | 1.5s | tiempoRetraido. Configurable por nivel. |
+| Pinchos retráctiles — fase asomando | 0.4s | tiempoAsomando. Fase intermedia SIN daño (telegrafío de salida). |
+| Pinchos retráctiles — fase desplegado | 1.5s | tiempoExtendido. Única fase con daño. |
 | Pinchos retráctiles — dirección | Arriba (default) | Enum DireccionSalida: Arriba / Abajo / Izquierda / Derecha. Inspector en SpikeHazard.cs. |
 | Pinchos retráctiles — modo de ciclo | Desfasado (default) | Enum ModoCiclo en SpikeGroup.cs: Sincronizado (todos juntos) / Desfasado (fase distribuida automáticamente) / Secuencial (con delay entre spikes). |
 | Pinchos retráctiles — delay secuencial | 0.15s | delayEntreSpikes en SpikeGroup.cs. Solo aplica en modo Secuencial. |
+| Pared reactiva — distancia de derribo | 1.5 u | distanciaDerribo en ReactiveWall.cs. Al superarla tirando con el gancho, cae. |
+| Pared reactiva — caída | 90° / 0.4s | angulosCaida / duracionCaida. Al terminar pasa a RigidbodyType2D.Static (puente). |
+| BreakableAnchor — delay de rotura | 0.6s | breakDelay desde que se engancha (OnHooked). |
+| BreakableAnchor — duración rompiéndose | 0.4s | breakingAnimDuration. |
 | BreakableAnchor — fases de advertencia | 3 | Igual que Plataforma Frágil: cambio de color progresivo. |
 | BreakableAnchor — regeneración | 5s (default) | regenDelay configurable en Inspector. Sin efecto si permanentBreak = true. |
 
 **15.4 Enemigos**
 
-**Guerrero Espectral (Patrullero Fantasmal)**
+**Guerrero Espectral (`SpectralPatrollerAI.cs`)**
 
-| **Parámetro** | **Valor** | **Notas** |
-| --- | --- | --- |
-| Velocidad — patrulla | 2 u/s | Atraviesa geometría. |
-| Velocidad — persecución | 4 u/s | Línea recta al jugador, sin respetar geometría. |
-| Velocidad — regreso | 3 u/s | Al volver al punto de patrulla. |
-| Radio de detección | 5 u | Chequeo cada frame. |
-| Radio de salida de persecución | ×1.5 del radio de detección | Al superarlo, regresa. |
-| Pausa en ALERTA | 0.3s | Antes de comenzar persecución. |
-| Traversal | Atraviesa todo salvo paredes doradas/rúnicas | Paredes bloqueantes: señalización dorada visible. |
-| Eliminación — fuego | Muerte instantánea | Única trampa que lo elimina. |
-| Eliminación — otras trampas | Sin efecto | Pinchos, roca, vacío no lo afectan. |
+No persigue en línea recta: orbita orgánicamente y ataca con dash cuando el jugador se queda quieto.
 
-**Momia del Templo (Patrullero Físico)**
+| **Parámetro** | **Valor** | **Variable** | **Notas** |
+| --- | --- | --- | --- |
+| Velocidad — patrulla | 2 u/s | velocidadPatrulla | Entre waypoints A/B. También usada en Regreso. |
+| Pausa en extremos | 0.6s | duracionIdle | En cada extremo de la ruta. |
+| Radio de detección | 6 u | radioDeteccion | Chequeo cada frame. |
+| Radio de abandono | 8.5 u | radioAbandonar | Al superarlo en órbita, regresa. |
+| Radio de órbita | 3 u | orbitRadius | Distancia mínima que mantiene (± flotación). |
+| Velocidad angular órbita | 1.5 rad/s | orbitVelocity | Componente tangencial. |
+| Acercamiento radial | 0.6 | approachSpeed | Resorte que cierra distancia de a poco. |
+| Firmeza radial | 1.5 | radialStiffness | Corrección hacia la distancia mínima. |
+| Flotación radio | 0.4 u @ 1.2 | floatAmplitude / floatSpeed | Variación sinusoidal del radio. |
+| Velocidad de dash | 18 u/s | dashSpeed | Línea recta hacia el jugador. |
+| Distancia de dash | 8 u | dashDistance | Incluye overshoot. |
+| Rango para iniciar dash | 3.5 u | dashTriggerRange | Debe estar a tiro para atacar. |
+| Cooldown de dash | 2s | cooldown | Entre ataques. |
+| Quietud para atacar | 1.5s (< 0.5 u/s) | playerStillTime / playerStillThreshold | El jugador debe quedarse quieto. |
+| Windup (telegrafío) | 0.35s | (EnterWindup) | Parpadeo blanco antes del dash. |
+| Recover | 0.4s | (EnterRecover) | Pausa tras el dash. |
+| Traversal | Atraviesa todo salvo SpectralWall | spectralWallMask | Paredes doradas/rúnicas: señalización visible. Detiene el dash. |
+| Eliminación — fuego | Muerte instantánea | (HazardFire) | Única trampa que lo elimina. Tag SpectralEnemy. |
+| Eliminación — otras trampas | Sin efecto | — | Pinchos, roca, vacío no lo afectan. |
+| Duración anim. muerte | 0.5s | deathAnimDuration | Antes de destruir el objeto. |
 
-| **Parámetro** | **Valor** | **Notas** |
-| --- | --- | --- |
-| Velocidad — patrulla | 2 u/s | Respeta geometría del nivel. |
-| Velocidad — persecución | 4 u/s | Sigue geometría. No puede cruzar abismos sin plataforma. |
-| Velocidad — regreso | 3 u/s | Al volver al punto de patrulla. |
-| Radio de detección | 5 u | Chequeo cada frame. |
-| Radio de salida de persecución | ×1.5 del radio de detección | Al superarlo, regresa. |
-| Pausa en ALERTA | 0.3s | Antes de comenzar persecución. |
-| Traversal | Mismas limitaciones que el jugador | No atraviesa paredes. Cae si el suelo bajo sus pies desaparece (plataforma frágil colapsada o plataforma de tracción arrastrada con gancho). |
-| Eliminación — fuego | Muerte instantánea |  |
+**Momia del Templo (`MummyAI.cs`)**
+
+Patrullero físico por rebote (sin waypoints) con salto y detección por línea de visión.
+
+| **Parámetro** | **Valor** | **Variable** | **Notas** |
+| --- | --- | --- | --- |
+| Velocidad — patrulla | 2 u/s | velocidadPatrulla | Por rebote. Respeta bordes y paredes. |
+| Velocidad — persecución | 3.5 u/s | velocidadPersecucion | No respeta bordes (puede caer). |
+| Pausa al girar | 0.4s | duracionIdle | Al rebotar en borde o pared. |
+| Radio de detección | 5 u | radioDeteccion | Requiere además línea de visión. |
+| Radio de abandono | 7 u | radioAbandonar | Valor absoluto (no ×1.5). Al superarlo vuelve a patrullar. |
+| Línea de visión | Linecast | maskVisionBloqueo | No detecta a través de paredes/suelo. Si está vacío usa maskSuelo. |
+| Fuerza de salto | 8 | fuerzaSalto | Salta paredes superables. |
+| Cooldown de salto | 0.6s | jumpCooldown | Entre saltos consecutivos. |
+| Altura de despeje (salto) | 1.0 u | jumpClearanceHeight | Si la pared sigue a esta altura, no la salta (gira). |
+| Alcance raycast de pared | 0.4 u | wallCheckDistance | Detección horizontal de pared. |
+| Salto en persecución | +1.2 u | alturaSaltoPersecucion | Salta si el jugador está más arriba. |
+| Zona muerta horizontal | 0.3 u | zonaMuertaX | Evita flip-flop si el jugador está justo encima. |
+| Detección de borde | 0.35 / 0.45 / 0.4 u | edgeCheckOffsetX/Y, edgeCheckDistance | Raycast hacia abajo adelante. |
+| Traversal | Mismas limitaciones que el jugador | — | No atraviesa paredes. Cae si el suelo bajo sus pies desaparece (frágil colapsada o tracción arrastrada con gancho). |
+| Duración anim. muerte | 1.2s | deathAnimDuration | Antes de destruir el objeto. |
+| Eliminación — fuego | Muerte instantánea |  |  |
 | Eliminación — pinchos | Muerte instantánea | Estáticos o retráctiles en estado activo. |
 | Eliminación — roca cayente | Muerte instantánea | Si la roca impacta sobre ella. |
 | Eliminación — vacío | Muerte instantánea | Si cae al void. |
@@ -1361,10 +1449,10 @@ Esta sección es la fuente de verdad para todos los valores numéricos del juego
 | **Parámetro** | **Valor** | **Notas** |
 | --- | --- | --- |
 | Posición | Fija — no se mueve | Definida en el nivel. |
-| Cadencia de disparo | 2–3s | Timer configurable por nivel. |
-| Dirección de disparo | Fija — definida en nivel | No apunta al jugador. |
-| Velocidad del proyectil | 8 u/s | Constante durante todo el vuelo. |
-| Vida del proyectil | 10s | Se destruye también al salir de pantalla. |
+| Cadencia de disparo | 2.5s (default) | cadencia en LauncherAI.cs. Configurable por nivel. |
+| Dirección de disparo | Fija — definida en nivel | direccionDisparo (default derecha). No apunta al jugador. |
+| Velocidad del proyectil | 8 u/s | velocidad en Projectile.cs. Constante durante todo el vuelo. |
+| Vida del proyectil | 10s | tiempoVida. Se destruye también al salir de pantalla. |
 | Daño — jugador | Reinicio inmediato | Contacto = muerte. |
 | Daño — Momia del Templo | Muerte instantánea | Friendly fire ambiental. |
 | Daño — Guerrero Espectral | Sin efecto | El proyectil lo atraviesa. |
@@ -1460,4 +1548,4 @@ Esta sección es la fuente de verdad para todos los valores numéricos del juego
 | Golem — Fase 2 | 48×64 px mín. | Crack visible, ojos brillantes | — |
 | Golem — muerte | 48×64 px mín. | — | 10–12f, colapso de piedra |
 
-*Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.0  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*
+*Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.4  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*
