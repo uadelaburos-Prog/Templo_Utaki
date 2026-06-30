@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,7 +23,6 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("Audio")]
     [SerializeField] private AudioClip sfxMuerte;
-    [SerializeField] private AudioClip musicaNivel;
 
     [Header("UI — HUD")]
     [SerializeField] private CanvasGroup fadePanel;
@@ -31,9 +31,16 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("UI — Paneles")]
     [SerializeField] private GameObject panelFinNivel;
-    [SerializeField] private TMP_Text   txtResumenPanel;
+    [Tooltip("Texto del panel de fin de nivel: tiempo del nivel (mm:ss).")]
+    [SerializeField] private TMP_Text   txtTiempoPanel;
+    [Tooltip("Texto del panel de fin de nivel: contador de muertes.")]
+    [SerializeField] private TMP_Text   txtMuertesPanel;
+    [Tooltip("Texto del panel de fin de nivel: cristales obtenidos / totales.")]
+    [SerializeField] private TMP_Text   txtCristalesPanel;
     [SerializeField] private GameObject panelPausa;
     [SerializeField] private GameObject panelOpciones;
+    [Tooltip("Panel que muestra el esquema de controles. Se abre desde la pausa y vuelve a ella al cerrar.")]
+    [SerializeField] private GameObject panelControles;
 
     [Header("Muerte Dramática")]
     [Tooltip("RawImage con el shader SpotlightOverlay. Debe ser hijo del GameObject de GameLoopManager para persistir entre escenas.")]
@@ -52,11 +59,20 @@ public class GameLoopManager : MonoBehaviour
     private bool    isPaused;
     private bool    isDying;
 
+    // Muertes acumuladas solo en el nivel actual (se resetea al entrar a un nivel nuevo).
+    private int     muertesNivel;
+
+    // buildIndex del último nivel cargado — distingue "nivel nuevo" de "recarga por muerte".
+    private int     _nivelAnterior = -1;
+
+    // Cristales ya recogidos en el nivel actual (clave = nivel + posición inicial).
+    // Persiste entre recargas (DontDestroyOnLoad) para que no reaparezcan al morir.
+    private readonly HashSet<string> _cristalesRecogidos = new HashSet<string>();
+
     // Estado del checkpoint — persiste entre recargas de escena (DontDestroyOnLoad)
     private Vector3 _checkpointPos;
     private bool    _checkpointActivo;
-    private int     _checkpointScena       = -1;
-    private int     _cristalesEnCheckpoint;
+    private int     _checkpointScena = -1;
 
     // ── LIFECYCLE ─────────────────────────────────────────────────
 
@@ -84,6 +100,17 @@ public class GameLoopManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        // Nivel nuevo = el buildIndex cambió. Una recarga por muerte mantiene el mismo
+        // buildIndex, así que conserva cristales recogidos y muertes acumuladas.
+        bool nivelNuevo     = scene.buildIndex != _nivelAnterior;
+        _nivelAnterior      = scene.buildIndex;
+
+        if (nivelNuevo)
+        {
+            _cristalesRecogidos.Clear();
+            muertesNivel = 0;
+        }
+
         nivelActual         = scene.buildIndex;
         isDying             = false;
         isPaused            = false;
@@ -94,8 +121,9 @@ public class GameLoopManager : MonoBehaviour
 
         // Red de seguridad: si un panel de pausa/opciones quedó activo al cambiar de
         // escena (muerte durante pausa, etc.), desactivarlo para que no quede colgado.
-        if (panelPausa    != null) panelPausa.SetActive(false);
-        if (panelOpciones != null) panelOpciones.SetActive(false);
+        if (panelPausa     != null) panelPausa.SetActive(false);
+        if (panelOpciones  != null) panelOpciones.SetActive(false);
+        if (panelControles != null) panelControles.SetActive(false);
 
         // Al volver al menu (escena 0) el Canvas DDOL del GLM no debe bloquear la UI del menu.
         // El panel queda oculto de inmediato; el menu maneja su propia presentacion visual.
@@ -109,16 +137,13 @@ public class GameLoopManager : MonoBehaviour
             return;
         }
 
+        cristalesObtenidos = _cristalesRecogidos.Count;
         ActualizarHUDCristales();
         ActualizarHUDMuertes();
         StartCoroutine(FadeInConEspera());
         if (_checkpointActivo && _checkpointScena == scene.buildIndex)
             StartCoroutine(AplicarSpawnCheckpoint());
-        if (musicaNivel != null)
-        {
-            AudioManager.instance?.PlayClip(musicaNivel);
-            AudioManager.instance?.SetMusicVolume(0.5f);
-        }
+        // La música por escena la maneja AudioManager (suscrito a sceneLoaded).
     }
 
     private void Start()
@@ -159,6 +184,7 @@ public class GameLoopManager : MonoBehaviour
         if (isPaused) CerrarPausaSilencioso();
 
         contadorMuertes++;
+        muertesNivel++;
         ActualizarHUDMuertes();
         AudioManager.instance?.FxSoundEffect(sfxMuerte, transform, 1f);
 
@@ -168,19 +194,35 @@ public class GameLoopManager : MonoBehaviour
             StartCoroutine(RutinaMuerteDramatica());
     }
 
-    public void CollectCrystal()
+    // Registra un cristal como recogido por su posición inicial. Idempotente: si ya
+    // estaba registrado (p. ej. doble disparo del OverlapCircle) no lo cuenta dos veces.
+    public void CollectCrystal(Vector3 posicionInicial)
     {
-        cristalesObtenidos++;
-        ActualizarHUDCristales();
+        if (_cristalesRecogidos.Add(ClaveCristal(posicionInicial)))
+        {
+            cristalesObtenidos = _cristalesRecogidos.Count;
+            ActualizarHUDCristales();
+        }
+    }
+
+    // Consultado por CrystalPickup.Start() — si ya fue recogido, no reaparece tras morir.
+    public bool CristalYaRecogido(Vector3 posicionInicial)
+    {
+        return _cristalesRecogidos.Contains(ClaveCristal(posicionInicial));
+    }
+
+    // Clave estable entre recargas: nivel + posición inicial redondeada a centésimas.
+    private string ClaveCristal(Vector3 pos)
+    {
+        return $"{nivelActual}:{Mathf.RoundToInt(pos.x * 100f)}:{Mathf.RoundToInt(pos.y * 100f)}";
     }
 
     // Llamado por CheckpointZone al activarse — guarda posición y cristales actuales
     public void GuardarCheckpoint(Vector3 pos)
     {
-        _checkpointPos         = pos;
-        _checkpointActivo      = true;
-        _checkpointScena       = nivelActual;
-        _cristalesEnCheckpoint = cristalesObtenidos;
+        _checkpointPos    = pos;
+        _checkpointActivo = true;
+        _checkpointScena  = nivelActual;
     }
 
     // Usado por CheckpointZone.Start() para restaurar estado visual al recargar
@@ -193,10 +235,14 @@ public class GameLoopManager : MonoBehaviour
 
     public void NivelCompleto()
     {
-        tiempoAcumulado     += Time.timeSinceLevelLoad;
+        float tiempoNivel    = Time.timeSinceLevelLoad;
+        tiempoAcumulado     += tiempoNivel;
         cristalesAcumulados += cristalesObtenidos;
 
-        ActualizarPanelResultado($"Tiempo: {Time.timeSinceLevelLoad:F2}s\nCristales: {cristalesObtenidos} / {cristalesTotales}");
+        // Desbloquea el siguiente nivel en el selector (persistido con PlayerPrefs).
+        ProgresoNiveles.DesbloquearHasta(nivelActual + 1);
+
+        ActualizarPanelResultado(tiempoNivel);
 
         if (panelFinNivel != null) panelFinNivel.SetActive(true);
         IsPaused              = true;
@@ -239,9 +285,12 @@ public class GameLoopManager : MonoBehaviour
 
         if (panelPausa != null) panelPausa.SetActive(isPaused);
 
-        // Cerrar opciones al salir de pausa
-        if (!isPaused && panelOpciones != null)
-            panelOpciones.SetActive(false);
+        // Cerrar subpaneles al salir de pausa
+        if (!isPaused)
+        {
+            if (panelOpciones  != null) panelOpciones.SetActive(false);
+            if (panelControles != null) panelControles.SetActive(false);
+        }
     }
 
     // Botón "Reanudar" del menú de pausa
@@ -256,6 +305,10 @@ public class GameLoopManager : MonoBehaviour
     {
         LimpiarCheckpoint();
         CerrarPausaSilencioso();
+        // Reinicio total del nivel: los cristales y las muertes vuelven a cero
+        // (a diferencia de morir, que los conserva).
+        _cristalesRecogidos.Clear();
+        muertesNivel = 0;
         StartCoroutine(RutinaReinicio());
     }
 
@@ -294,9 +347,8 @@ public class GameLoopManager : MonoBehaviour
 
     private void LimpiarCheckpoint()
     {
-        _checkpointActivo      = false;
-        _checkpointScena       = -1;
-        _cristalesEnCheckpoint = 0;
+        _checkpointActivo = false;
+        _checkpointScena  = -1;
     }
 
     // Cierra la pausa sin animación (usada antes de cargar escena)
@@ -305,8 +357,9 @@ public class GameLoopManager : MonoBehaviour
         isPaused       = false;
         IsPaused       = false;
         Time.timeScale = 1f;
-        if (panelPausa    != null) panelPausa.SetActive(false);
-        if (panelOpciones != null) panelOpciones.SetActive(false);
+        if (panelPausa     != null) panelPausa.SetActive(false);
+        if (panelOpciones  != null) panelOpciones.SetActive(false);
+        if (panelControles != null) panelControles.SetActive(false);
     }
 
     // ── CORRUTINAS ────────────────────────────────────────────────
@@ -320,8 +373,6 @@ public class GameLoopManager : MonoBehaviour
 
         player.RespawnAt(_checkpointPos);
         CamaraScript.Instance?.SnapToPlayer();
-        cristalesObtenidos = _cristalesEnCheckpoint;
-        ActualizarHUDCristales();
     }
 
     private IEnumerator RutinaMuerteDramatica()
@@ -365,7 +416,6 @@ public class GameLoopManager : MonoBehaviour
         while (op.progress < 0.7f)
             yield return null;
 
-        cristalesObtenidos      = 0;
         op.allowSceneActivation = true;
     }
 
@@ -435,8 +485,19 @@ public class GameLoopManager : MonoBehaviour
             txtMuertes.text = $"Muertes: {contadorMuertes}";
     }
 
-    private void ActualizarPanelResultado(string texto)
+    // Llena los tres textos del panel de fin de nivel: tiempo, muertes y cristales.
+    private void ActualizarPanelResultado(float tiempoNivel)
     {
-        if (txtResumenPanel != null) txtResumenPanel.text = texto;
+        if (txtTiempoPanel    != null) txtTiempoPanel.text    = $"Tiempo: {FormatearTiempo(tiempoNivel)}";
+        if (txtMuertesPanel   != null) txtMuertesPanel.text   = $"Muertes: {muertesNivel}";
+        if (txtCristalesPanel != null) txtCristalesPanel.text = $"Cristales: {cristalesObtenidos} / {cristalesTotales}";
+    }
+
+    // Formatea segundos a mm:ss (los niveles duran minutos, más legible que "312.45s").
+    private static string FormatearTiempo(float segundos)
+    {
+        int min = (int)(segundos / 60f);
+        int seg = (int)(segundos % 60f);
+        return $"{min:00}:{seg:00}";
     }
 }

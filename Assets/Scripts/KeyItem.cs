@@ -53,6 +53,8 @@ public class KeyItem : MonoBehaviour
     private float         _chargeTimer;
     private bool          _cargando;
     private float         _cooldownPickup;
+    private Vector2       _posicionOrigen;
+    private Quaternion    _rotacionOrigen;
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -60,6 +62,10 @@ public class KeyItem : MonoBehaviour
     {
         _rb  = GetComponent<Rigidbody2D>();
         _col = GetComponent<Collider2D>();
+
+        // Lugar de origen: al caer al void, la llave reaparece aquí en vez de destruirse
+        _posicionOrigen = transform.position;
+        _rotacionOrigen = transform.rotation;
 
         // Sin fricción: el frenado en suelo lo gestiona rozamientoSuelo por código, y sobre
         // una MovingPlatform evita que el arrastre físico se sume al teletransporte (doble empuje)
@@ -199,13 +205,27 @@ public class KeyItem : MonoBehaviour
 
     // ── API pública ───────────────────────────────────────────────
 
-    // Llamado por VoidScript cuando la llave cae al vacío — mismo void que el jugador
+    // Llamado por VoidScript cuando la llave cae al vacío — en vez de destruirse,
+    // reaparece en su lugar de origen para no bloquear el nivel
     public void MorirPorVoid()
     {
+        // Si la llave estaba siendo portada, devolver el control del gancho al jugador
         if (_estado == Estado.Portada && _grapple != null)
             _grapple.enabled = true;
+
         if (barraRoot != null) barraRoot.SetActive(false);
-        Destroy(gameObject);
+        _cargando = false;
+
+        // Reaparece limpia en el origen, lista para caer y asentarse
+        enabled             = true;   // reactiva Update si la portaba un enemigo
+        transform.position  = _posicionOrigen;
+        transform.rotation  = _rotacionOrigen;
+        _estado             = Estado.EnVuelo;
+        _rb.bodyType        = RigidbodyType2D.Dynamic;
+        _rb.linearVelocity  = Vector2.zero;
+        _rb.angularVelocity = 0f;
+        _col.enabled        = true;
+        _cooldownPickup     = cooldownRecoger;
     }
 
     // Llamado por KeyDoor al abrir — consume la llave

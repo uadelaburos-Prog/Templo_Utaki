@@ -23,6 +23,13 @@ public class CrystalPickup : MonoBehaviour
     {
         startPos    = transform.position;
         floatOffset = Random.Range(0f, Mathf.PI * 2f);
+
+        // Si ya se recogió este cristal en el nivel actual, no reaparece tras morir.
+        if (GameLoopManager.Instance != null &&
+            GameLoopManager.Instance.CristalYaRecogido(startPos))
+        {
+            gameObject.SetActive(false);
+        }
     }
 
     private void Update()
@@ -33,7 +40,7 @@ public class CrystalPickup : MonoBehaviour
         if (Physics2D.OverlapCircle(transform.position, pickupRadius, playerMask))
         {
             AudioManager.instance?.FxSoundEffect(sfxCristal, transform, 1f);
-            GameLoopManager.Instance.CollectCrystal();
+            GameLoopManager.Instance.CollectCrystal(startPos);
             gameObject.SetActive(false);
         }
     }

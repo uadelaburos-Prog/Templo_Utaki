@@ -193,6 +193,7 @@ GameObject:
   - component: {fileID: 8615571349739120332}
   - component: {fileID: 5571375290543817363}
   - component: {fileID: 2153094857667611883}
+  - component: {fileID: 182388602507673857}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -522,7 +523,7 @@ DistanceJoint2D:
   m_Anchor: {x: 0.3114667, y: -0.40115786}
   m_ConnectedAnchor: {x: -2.3013866, y: -3.18856}
   m_AutoConfigureDistance: 1
-  m_Distance: 90.39406
+  m_Distance: 37.287617
   m_MaxDistanceOnly: 1
 --- !u!95 &5571375290543817363
 Animator:
@@ -580,7 +581,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.002332449, y: 0.014730811}
+  m_Offset: {x: 0.002332449, y: -0.09990287}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -590,8 +591,22 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 1.0205455, y: 1.8687093}
+  m_Size: {x: 1.0205455, y: 1.639442}
   m_EdgeRadius: 0
+--- !u!114 &182388602507673857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5319143297967617440}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 486ffee7b4fb18f4380fc96a09e2cc7b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cheatsHabilitados: 1
+  teleportKey: 282
 --- !u!1 &5723299466682841518
 GameObject:
   m_ObjectHideFlags: 0

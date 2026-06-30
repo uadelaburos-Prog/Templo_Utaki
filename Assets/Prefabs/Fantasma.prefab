@@ -308,7 +308,7 @@ MonoBehaviour:
   floatSpeed: 1.2
   floatAmplitude: 0.4
   dashSpeed: 14
-  dashDistance: 8
+  dashDistance: 14
   cooldown: 2
   dashTriggerRange: 10
   playerStillThreshold: 0.5

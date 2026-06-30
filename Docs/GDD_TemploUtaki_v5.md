@@ -8,7 +8,7 @@
 
 | **Estudio** | **Demonic Arts Company** |
 | --- | --- |
-| Versión | v5.4 — Junio 2026  ·  MummyAI (rebote + salto + línea de visión)  ·  LauncherAI/Projectile/KeyItem/KeyDoor implementados  ·  Sincronización de parámetros con build main |
+| Versión | v5.6 — Junio 2026  ·  Cristales persistentes al morir  ·  Fin de nivel con tiempo/muertes/cristales  ·  Doble contador de muertes  ·  Audio centralizado en AudioManager (música por zona, idempotente)  ·  Panel de controles + ESC en menús  ·  base v5.5 (selector de niveles, sistemas de evento, pinchos en secuencia) |
 | Motor | Unity 6000.0.30f1 — URP 2D |
 | Plataforma | PC (escalable a consolas) |
 | Duración estimada | 20–30 minutos |
@@ -313,7 +313,7 @@ El gancho interactúa con dos categorías distintas de objetos del nivel, difere
 | Fuego | Zona de área. Estático. | Animación de llama + partículas. | Contacto = reinicio. |
 | Foso de Vacío | Caída fuera del nivel. Muerte por vacío: reinicio inmediato sin animación dramática. | Oscuridad visible. Sin borde marcado. | Caída = reinicio. |
 | Llamarada Retráctil | Ciclo activo/inactivo configurable. Dispara una columna de fuego hacia arriba, más alta que los pinchos retráctiles. Comportamiento idéntico a los pinchos retráctiles en lógica de ciclo. | Brillo anaranjado en el suelo antes de activarse + sonido de ignición como advertencia. | Contacto activo = reinicio. Mata al Espectral. El único hazard cíclico que lo elimina. |
-| Pinchos Retráctiles | Ciclo fijo configurable (ej: 1.5s activo / 1.5s retráctil). SpikeMode.Retractil — solo activos en estado Desplegado. Dirección configurable: Arriba / Abajo / Izquierda / Derecha. Grupos soportan tres modos de ciclo: Sincronizado (todos juntos), Desfasado (distribuido automáticamente) y Secuencial (activación en orden con delay entre spikes). | Animación de salida + color rojo. Ciclo constante y predecible. Flecha direccional en Gizmos (Editor). | Contacto en estado Desplegado = reinicio. |
+| Pinchos Retráctiles | Ciclo fijo configurable (ej: 1.5s activo / 1.5s retráctil). SpikeMode.Retractil — solo activos en estado Desplegado. Dirección configurable: Arriba / Abajo / Izquierda / Derecha. Grupos (SpikeGroup) soportan tres modos de ciclo: Sincronizado (todos juntos), Desfasado (distribuido automáticamente) y Secuencial (activación en orden con delay entre spikes). **Secuencia manual:** cada pincho individual puede coordinarse a mano desde su propio Inspector combinando `faseInicial` (punto del ciclo donde arranca, 0–1) y `delayInicial` (espera oculto antes del primer ciclo) — ambos parámetros se combinan, permitiendo armar cascadas/ondas colocando pinchos sueltos sin necesidad de un SpikeGroup. | Animación de salida + color rojo. Ciclo constante y predecible. Flecha direccional en Gizmos (Editor). | Contacto en estado Desplegado = reinicio. |
 
 | *Regla universal: todos los obstáculos deben ser visibles antes de que el jugador pueda impactarlos. Ningún obstáculo mata por sorpresa en la primera pasada de un nivel correctamente diseñado.* |
 | --- |
@@ -421,6 +421,39 @@ El punto de anclaje no es un objeto específico: es una propiedad asignable a cu
 **—  **Llave: al enganchar la llave y presionar S, se retrae hacia el jugador. Ver Sección 5.5.
 
 | *Principio de diseño: el jugador debe poder anticipar la consecuencia de un tiro de gancho antes de ejecutarlo. Si el objeto es de madera y tiene una argolla visible, el resultado es predecible. El juego nunca sorprende negativamente con una interacción de gancho.* |
+| --- |
+
+**4.6 Sistemas de Evento y Escenas Scriptadas**
+
+Algunos momentos del juego — en particular la escena estilo "Indiana Jones" del Nivel 5 — encadenan varias consecuencias a partir de un único disparador. El sistema está diseñado por composición con `UnityEvent`: un objeto recolectable dispara el evento y cada consecuencia se cablea desde el Inspector, sin un manager central. Los efectos exponen métodos públicos sin parámetros para colgarse directamente del evento.
+
+**Reliquia Disparadora (RelicaPickup)**
+
+**—  **Ídolo/reliquia recolectable por proximidad (OverlapCircle contra la capa del jugador), con flotación visual. Misma lógica de recolección que un cristal.
+
+**—  **Al recogerse dispara **una sola vez** un `UnityEvent` desde el que se cablea toda la consecuencia (activar/desactivar objetos, lanzar la roca, cambiar el skin del jugador). Por diseño actual, todos los efectos se disparan al instante.
+
+**Objeto Activable (ObjetoActivable)**
+
+**—  **Pared, terreno o trampa genérica que se enciende o apaga por evento (desde la reliquia, una palanca, una placa, etc.). Habilita/deshabilita los Collider2D y Renderer del objeto y sus hijos.
+
+**—  **Estado inicial configurable (`activoInicial`). Opción de animación de aparición deslizándose desde un offset (terreno que "emerge"). API: `Activar()`, `Desactivar()`, `Alternar()`.
+
+**Roca Rodante (RollingBoulder)**
+
+**—  **Roca redonda estilo Indiana Jones. Permanece dormida (sin simular física) hasta `Activar()`: cae por gravedad y rueda horizontalmente en la dirección configurada hacia la ruta de escape del jugador, girando acorde a su velocidad.
+
+**—  **Contacto con el jugador = reinicio. Aplasta también a la Momia (friendly fire ambiental), coherente con el resto de las trampas.
+
+**—  **Se distingue de la **Roca Cayente** (Sección 4.3): la Cayente cae vertical y luego se desliza hasta una pared; la Rodante es una persecución horizontal continua activada por evento.
+
+**Cambio de Skin del Jugador (PlayerSkinSwapper)**
+
+**—  **Cambia "todos los sprites" del jugador a una variante intercambiando el `RuntimeAnimatorController` del Animator (se recomienda un Animator Override Controller, que reusa estados/transiciones y solo sustituye los clips). Las animaciones se conservan intactas. Opción de tinte del SpriteRenderer.
+
+**—  **API: `CambiarVariante()`, `RestaurarOriginal()`, `Alternar()`. Pensado para reflejar visualmente un evento narrativo (ej. recoger la reliquia).
+
+| *Nota de diseño: el sistema reemplaza al antiguo `SecuenciaEventos` (orquestador temporizado), retirado en favor de disparar las consecuencias directamente desde el recolectable. Si en el futuro se necesitan retardos entre efectos, se reintroducirá temporización sin volver a un manager central.* |
 | --- |
 
 **5.  ****SISTEMA DE ENEMIGOS**
@@ -836,6 +869,13 @@ Aparece la Momia del Templo. Las plataformas frágiles se introducen. El jugador
 
 La zona más oscura y hostil del templo. Ambos patrulleros presentes junto al Lanzador. Introduce el friendly fire ambiental: el jugador puede conducir a la Momia hacia la línea de fuego del Lanzador para eliminarla.
 
+**Escena scriptada (estilo Indiana Jones)**
+
+El Nivel 5 contiene un momento set-piece construido con los sistemas de evento (ver Sección 4.6). Al recoger una **reliquia/ídolo** (RelicaPickup), un único disparador encadena las consecuencias cableadas desde el Inspector: por ejemplo el techo cede (ObjetoActivable), una **roca rodante** (RollingBoulder) persigue al jugador por el corredor, surgen trampas (ObjetoActivable) y el jugador cambia de apariencia (PlayerSkinSwapper). Las consecuencias se disparan al instante al recoger la reliquia.
+
+| *ℹ  El set-piece refuerza el clímax del recorrido más hostil. La roca rodante crea una secuencia de huida de lectura inmediata; el resto de efectos se ajustan desde el UnityEvent de la reliquia sin tocar código.* |
+| --- |
+
 | *[ INSERTAR IMAGEN ]  Esquema del Nivel 5 — A completar por Game Design* |
 | --- |
 
@@ -899,6 +939,8 @@ La lista completa de SFX con descripción y nivel de prioridad está en (*ver Se
 
 **—  **El volumen de la música se reduce durante momentos de alta tensión para dar protagonismo a los SFX.
 
+**—  **La música es **continua**: pasar entre niveles de la misma zona —o reiniciar el nivel tras morir— **no** reinicia la pista; solo cambia (con crossfade) al cambiar de zona. La pista de cada escena se configura de forma centralizada en el `AudioManager` (mapa por buildIndex), accesible desde el menú.
+
 **9.  ****UI Y SISTEMAS DE JUEGO**
 
 **9.1 HUD**
@@ -919,35 +961,53 @@ Distribuidos a lo largo de cada nivel, los cristales son opcionales. No afectan 
 | --- | --- |
 | Recolección | Contacto directo del jugador. Feedback: 'ding' + brillo breve. |
 | Efecto en juego | Ninguno. Solo puntuación. |
-| Al reiniciar nivel | Los cristales reaparecen. El contador vuelve a cero. No se acumulan entre intentos. |
+| Al morir / reaparecer | Los cristales **ya recogidos no reaparecen** — el progreso de cristales se conserva al morir (persistencia por posición en el `GameLoopManager`). El contador se mantiene. |
+| Al reiniciar manual (R) o cambiar de nivel | Los cristales reaparecen y el contador vuelve a cero. No se acumulan entre niveles. |
 | Cantidad por nivel | Sin número fijo. Game Design los ubica según el layout del nivel. |
-| HUD | Indicador pequeño siempre visible: cristales recogidos en la sesión actual del nivel. |
+| HUD | Indicador pequeño siempre visible: cristales recogidos en el nivel actual. |
 | Fin de nivel | Muestra cristales obtenidos / total del nivel. |
 
 **9.3 Estados del Juego**
 
 | **Estado** | **Descripción** |
 | --- | --- |
-| Menú Principal | Jugar, Opciones, Salir. Transición suave con fade antes de cargar o salir. MenuManager autónomo — sin dependencia de GameLoopManager. |
+| Menú Principal | Jugar, Opciones, Salir. Submenús (opciones/controles) organizados por pestañas. ESC cierra el panel abierto. Transición suave con fade antes de cargar o salir. MenuManager autónomo — sin dependencia de GameLoopManager. |
 | En Juego | HUD mínimo activo. El juego arranca desde el Nivel 1. |
-| Pausa | Tiempo congelado. Opciones: Reanudar, Reintentar, Opciones, Menú Principal. ESC reanuda directamente. |
+| Pausa | Tiempo congelado. Opciones: Reanudar, Reintentar, Opciones (sonido), Controles, Menú Principal. ESC reanuda directamente. Los subpaneles (opciones/controles) se cierran solos al reanudar. |
 | Muerte — por trampa | Secuencia dramática breve (SpotlightOverlay + pausa corta) antes del reinicio automático. |
 | Muerte — por caída al vacío | Reinicio automático inmediato, sin secuencia. Si hay checkpoint activo, reaparece desde ese punto. |
-| Fin de Nivel | Pantalla breve con cristales obtenidos / total y tiempo en nivel. Continuar al siguiente. |
-| Victoria | Pantalla de créditos con puntuación total y contador de muertes. |
+| Fin de Nivel | Pantalla breve con tres datos: tiempo en nivel (mm:ss), muertes en el nivel y cristales obtenidos / total. Continuar al siguiente. |
+| Victoria | Pantalla de créditos con puntuación total y contador de muertes (acumulado de la partida). |
 
 **9.4 Sistema de Checkpoints**
 
 Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al entrar en un checkpoint, el juego guarda la posición del jugador en ese momento. Si el jugador muere después, reaparece desde ese punto en lugar de desde el inicio del nivel.
 
-| *ℹ  Principio de diseño: el checkpoint suaviza la dificultad en niveles largos sin eliminar el desafío — el jugador aún pierde los cristales recogidos desde el checkpoint. Reiniciar explícitamente el nivel (tecla R) borra el checkpoint activo.* |
+| *ℹ  Principio de diseño: el checkpoint suaviza la dificultad en niveles largos sin eliminar el desafío — define solo el punto de reaparición. Los cristales recogidos se conservan al morir (no dependen del checkpoint). Reiniciar explícitamente el nivel (tecla R) borra el checkpoint activo y reinicia los cristales del nivel.* |
 | --- |
 
 **—  **Solo hay un checkpoint activo por sesión de nivel. Activar uno nuevo sobreescribe el anterior.
 
-**—  **Al morir, el nivel se recarga y el jugador aparece en la posición del checkpoint. Los cristales se restauran al valor que tenían cuando se activó.
+**—  **Al morir, el nivel se recarga y el jugador aparece en la posición del checkpoint. Los cristales ya recogidos se conservan (persisten entre recargas), no se restauran a un valor anterior.
 
 **—  **Al avanzar al siguiente nivel o reiniciar manualmente, el checkpoint se borra. El siguiente intento arranca desde el inicio.
+
+**9.5 Selector de Niveles**
+
+Pantalla de selección de niveles con desbloqueo por progresión. Reutiliza la mecánica nativa de los botones de UI de Unity: el botón se resalta al pasar el cursor (estado Highlighted) y carga el nivel al presionar.
+
+**—  **Persistencia: el progreso se guarda con `PlayerPrefs` (clave única con el mayor nivel desbloqueado). Persiste entre sesiones de juego. Fuente única de verdad: `ProgresoNiveles`.
+
+**—  **Desbloqueo: al completar un nivel se desbloquea el siguiente (lo escribe `GameLoopManager.NivelCompleto()`). El selector (`SelectorNiveles`) lee el progreso y habilita o bloquea cada botón.
+
+**—  **El **Nivel 1 está siempre desbloqueado** (marca `siempreDesbloqueado` por botón, además de la garantía del primer nivel en `ProgresoNiveles`).
+
+**—  **Estado visual: cada botón intercambia su sprite según el estado — sprite normal cuando está desbloqueado, sprite de bloqueado (candado) cuando no. El botón bloqueado además queda no interactuable.
+
+**—  **Convención de Build Settings: índice 0 = menú, 1..N = niveles jugables.
+
+| *ℹ  Principio de diseño: el selector da acceso rápido a niveles ya superados (replay, búsqueda de cristales) sin permitir saltear contenido no alcanzado. El reseteo de progreso (testing/opciones) nunca bloquea el Nivel 1.* |
+| --- |
 
 **PARTE II**
 
@@ -998,8 +1058,8 @@ Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al en
 | OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo. | ✅ Implementado |
 | SpikeHazard.cs | Pinchos estáticos y retráctiles. 3 estados: Retraído / Asomando (sin daño) / Desplegado. DireccionSalida enum (Arriba/Abajo/Izquierda/Derecha). SpikeGroup con ModoCiclo: Sincronizado / Desfasado / Secuencial (delayEntreSpikes=0.15s). | ✅ Implementado |
 | VoidScript.cs | Foso de vacío: trigger → PlayerDied(fromVoid:true). Reinicio inmediato sin SpotlightOverlay. | ✅ Implementado |
-| GameLoopManager.cs | Gestión de nivel: inicio, fin, reinicio, cristales, contador de muertes. Sistema de muerte: distingue hazard (RutinaMuerteDramatica con SpotlightOverlay + timeScale=0) y vacío (RutinaReinicio inmediata). Flag isDying previene muertes simultáneas. Sistema de checkpoints: GuardarCheckpoint(), AplicarSpawnCheckpoint(), LimpiarCheckpoint(). DontDestroyOnLoad. Hijo directo: SpotlightCanvas. Instanciar en Nivel 1. | ✅ Implementado |
-| AudioManager.cs | Singleton con DontDestroyOnLoad. SFX espaciales. Música con crossfade (SwapingVolume). Control de volumen vía AudioMixer. StopMusic() para transiciones de menú. | ✅ Implementado |
+| GameLoopManager.cs | Gestión de nivel: inicio, fin, reinicio, cristales, contador de muertes. **Cristales persistentes**: HashSet por posición (no reaparecen al morir; se reinician al Reintentar o cambiar de nivel). **Dos contadores de muertes**: global de la partida (HUD/victoria) y por nivel (panel de fin de nivel). Panel de fin de nivel con tres textos (tiempo mm:ss, muertes del nivel, cristales). Referencia a panelControles (lo cierra por seguridad al despausar/cambiar escena; el switching de pestañas es por Inspector). Sistema de muerte: distingue hazard (RutinaMuerteDramatica con SpotlightOverlay + timeScale=0) y vacío (RutinaReinicio inmediata). Flag isDying previene muertes simultáneas. Sistema de checkpoints: GuardarCheckpoint(), AplicarSpawnCheckpoint(), LimpiarCheckpoint(). NivelCompleto() desbloquea el siguiente nivel vía ProgresoNiveles.DesbloquearHasta(). Ya **no** gestiona música. DontDestroyOnLoad. Hijo directo: SpotlightCanvas. Instanciar en Nivel 1. | ✅ Implementado |
+| AudioManager.cs | Singleton con DontDestroyOnLoad. SFX espaciales (FxObject). **Autoridad de música por escena**: array musicaPorEscena indexado por buildIndex, suscrito a sceneLoaded, reproduce la pista de cada escena (incluido el menú). PlayMusic **idempotente** (no reinicia si ya suena ese clip → continuidad al morir y entre escenas de la misma zona) con crossfade (SwapingVolume). Control de volumen vía AudioMixer. Se configura una sola vez desde el menú. | ✅ Implementado |
 | CamaraScript.cs | Seguimiento con Lerp, look-behind horizontal, look-down proporcional a velocidad de caída. SnapToPlayer() al respawnear desde checkpoint. | ✅ Implementado |
 | CrystalPickup.cs | Trigger de recolección, comunicación con GameLoopManager. | ✅ Implementado |
 | HazardFire.cs | Zona de fuego: mata Player (fromVoid=false) + llama SpectralPatrollerAI.Morir() y PatrollerAI.Morir(). | ✅ Implementado |
@@ -1007,7 +1067,13 @@ Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al en
 | SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: patrulla (waypoints A/B), idle, regreso, órbita orgánica (tangencial + resorte radial; orbitRadius 3u ± 0.4u sinusoidal, orbitVelocity 1.5 rad/s), windup con parpadeo blanco (0.35s), dash (18 u/s, 8u, cooldown 2s, dashTriggerRange 3.5u, playerStillTime 1.5s), recover (0.4s). Detección radio 6u / abandono 8.5u. AfterimageTrail durante dash. isTrigger forzado en Awake. Bloqueado solo por SpectralWall. Muerte por HazardFire (tag SpectralEnemy). | ✅ Implementado |
 | CheckpointZone.cs | Objeto en escena (trigger one-shot). Al entrar el jugador: llama GameLoopManager.GuardarCheckpoint(). Restaura estado visual del animator al recargar (tolerancia 0.1u). SFX de activación. | ✅ Implementado |
 | BreakableAnchor.cs | Superficie grappleable destructible. Se activa mediante OnHooked(GrappleScript) al engancharse. Tres fases de advertencia visual antes de la rotura. El gancho se retrae automáticamente al romperse. Parámetros: permanentBreak (bool), regenDelay (float, default 5s). | ✅ Implementado |
-| MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego(), Salir(), AbrirOpciones(), CerrarOpciones(). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime) + AudioManager.StopMusic(). | ✅ Implementado |
+| MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego(), IrANivel(indice), Salir(), AbrirOpciones(), CerrarOpciones(). ESC cierra el panel abierto (array panelesCerrablesConEsc, uno por pulsación). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime); ya **no** corta la música al entrar a un nivel (el destino la cambia con crossfade), solo StopMusic al salir del juego. La música del menú la maneja el AudioManager (buildIndex 0). | ✅ Implementado |
+| SelectorNiveles.cs | Selector de niveles (UI). Habilita/bloquea botones según el progreso (ProgresoNiveles) e intercambia el sprite de cada botón (normal/bloqueado). Cablea el onClick para cargar el nivel con fade. Flag siempreDesbloqueado por nivel. RefrescarBotones() en OnEnable. | ✅ Implementado |
+| ProgresoNiveles.cs | Persistencia del progreso de niveles vía PlayerPrefs (clase estática). MaxDesbloqueado, EstaDesbloqueado(idx), DesbloquearHasta(idx), Reiniciar(). El Nivel 1 nunca baja del mínimo. | ✅ Implementado |
+| RelicaPickup.cs | Reliquia/ídolo recolectable por proximidad (OverlapCircle) con flotación. Al recogerse dispara un UnityEvent (una sola vez) que cablea las consecuencias de la escena scriptada. | ✅ Implementado |
+| ObjetoActivable.cs | Activa/desactiva paredes, terreno o trampas por evento (Collider2D + Renderer propios e hijos). activoInicial, animación de aparición por offset. Activar()/Desactivar()/Alternar(). | ✅ Implementado |
+| RollingBoulder.cs | Roca rodante estilo Indiana Jones. Dormida hasta Activar(): cae y rueda horizontalmente girando con su velocidad. Contacto con jugador = reinicio; aplasta a la Momia. | ✅ Implementado |
+| PlayerSkinSwapper.cs | Cambia el RuntimeAnimatorController del jugador a una variante (Override Controller recomendado), conservando estados/transiciones. Tinte opcional. CambiarVariante()/RestaurarOriginal()/Alternar(). | ✅ Implementado |
 | KeyDoor.cs | Vínculo llave-puerta. Detección de proximidad del jugador con llave (radioApertura 2u). Animación de apertura por frames con desplazamiento ascendente (duracionFrame 0.08s). Collider desactivado al comenzar la animación. | ✅ Implementado |
 | KeyItem.cs | Física de la llave, recolección por proximidad (radioPickup 0.8u) o gancho, lanzamiento con sistema de carga (velocidadMin 6 / velocidadMax 20, maxCargaTiempo 1.5s), rozamiento en suelo, respawn al caer al void, cooldown de recogida 0.5s. | ✅ Implementado |
 | KeyCarrier.cs | Componente para enemigos que portan una llave. SoltarLlave() la deja caer con física en el punto de muerte. offsetPortada configurable. | ✅ Implementado |
@@ -1016,7 +1082,7 @@ Los niveles pueden contener zonas de checkpoint colocadas por Game Design. Al en
 | LevelExit.cs | Trigger de fin de nivel → NivelCompleto(). | ✅ Implementado |
 | CrystalPickup.cs | Recolección por proximidad (pickupRadius 0.6u), flotación + rotación visual, comunicación con GameLoopManager. | ✅ Implementado |
 | OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo, bajar con S/↓ (duracionBajar 0.3s). | ✅ Implementado |
-| SpikeHazard.cs / SpikeGroup.cs | Pinchos estáticos y retráctiles (3 fases: Retraído / Asomando sin daño / Desplegado). DireccionSalida enum. SpikeGroup orquesta grupos con ModoCiclo (Sincronizado / Desfasado / Secuencial, delayEntreSpikes 0.15s). | ✅ Implementado |
+| SpikeHazard.cs / SpikeGroup.cs | Pinchos estáticos y retráctiles (3 fases: Retraído / Asomando sin daño / Desplegado). DireccionSalida enum. SpikeGroup orquesta grupos con ModoCiclo (Sincronizado / Desfasado / Secuencial, delayEntreSpikes 0.15s). **Secuencia manual:** `faseInicial` (0–1) y `delayInicial` se combinan — tras la espera oculta, el pincho arranca en el punto del ciclo de la fase. Permite cascadas con pinchos sueltos sin SpikeGroup. | ✅ Implementado |
 | HazardFire.cs | Zona/llamarada de fuego con ciclo configurable (inactivo/creciendo/activo/menguando). Mata Player y elimina Espectral (SpectralPatrollerAI) y Momia (MummyAI/PatrollerAI). | ✅ Implementado |
 | Lever.cs | Palanca/switch: alterna estado ON/OFF de objeto vinculado por contacto. | ✅ Implementado |
 | ReactiveWall.cs | Pared reactiva al gancho. Cae al superar distanciaDerribo (1.5u), animación de rotación (angulosCaida 90°, duracionCaida 0.4s). Al terminar pasa a RigidbodyType2D.Static (puente sólido). IHookable. | ✅ Implementado |
@@ -1212,16 +1278,16 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-053** | **Golem — Condición de victoria** | El jugador alcanza el punto débil del Golem en las ventanas entre ataques. | Enemigos | *Mecánica a cargo de Game Design.* |
 | **▌ SISTEMA DE DAÑO Y MUERTE** |
 | **F-054** | **Muerte instantánea** | Cualquier contacto con enemigo, proyectil o trampa = reinicio. Sin vidas ni salud. | Sistema | *Muerte por hazard: animación dramática + SpotlightOverlay + pausa (Time.timeScale = 0). Muerte por vacío: reinicio inmediato. Jugador de vuelta **<** 2s.* |
-| **F-055** | **Reinicio automático** | Tras la muerte, el nivel se reinicia sin pantalla de game over. | Sistema | *Cristales reaparecen, contador vuelve a cero.* |
-| **F-056** | **Contador de muertes** | Registro de muertes en el nivel actual. En HUD (opcional) y en pantalla de victoria. | Sistema | *Puede ocultarse en opciones.* |
+| **F-055** | **Reinicio automático** | Tras la muerte, el nivel se reinicia sin pantalla de game over. | Sistema | *Los cristales ya recogidos **se conservan** (no reaparecen); reinician solo con R o al cambiar de nivel. La música no se reinicia.* |
+| **F-056** | **Contador de muertes** | Dos registros: global de la partida (HUD + pantalla de victoria) y por nivel (panel de fin de nivel). | Sistema | *Global = contadorMuertes; por nivel = muertesNivel (se resetea al entrar a un nivel nuevo o Reintentar).* |
 | **▌ COLECCIONABLES** |
 | **F-057** | **Cristales de puntuación** | Opcionales. Contacto directo los recolecta. No afectan progresión. | Coleccionables | *CrystalPickup.cs.* |
 | **F-058** | **Contador HUD de cristales** | Esquina superior: cristales recogidos / total. Siempre visible. | Coleccionables |  |
-| **F-059** | **Resumen fin de nivel** | Pantalla breve: cristales obtenidos / total y tiempo. | Coleccionables |  |
+| **F-059** | **Resumen fin de nivel** | Pantalla breve con tres textos separados: tiempo en nivel (mm:ss), muertes en el nivel y cristales obtenidos / total. | Coleccionables | *txtTiempoPanel / txtMuertesPanel / txtCristalesPanel en GameLoopManager.* |
 | **▌ UI Y ESTADOS DEL JUEGO** |
-| **F-060** | **Menú Principal** | Jugar, Opciones, Salir. Fade-out antes de cargar escena o salir. Música se detiene en transición. MenuManager autónomo. | UI | *MenuManager.cs. CanvasGroup fade 0.4s (unscaledDeltaTime). AudioManager.StopMusic().* |
-| **F-061** | **Pausa** | Tiempo congelado. Reanudar, Reintentar, Opciones, Menú Principal. ESC reanuda directo. | UI | *Sin penalización por pausar.* |
-| **F-062** | **Pantalla de fin de nivel** | Cristales y tiempo al completar. Continuar al siguiente. | UI |  |
+| **F-060** | **Menú Principal** | Jugar, Opciones, Salir. Submenús por pestañas (opciones/controles); ESC cierra el panel abierto. Fade-out antes de cargar escena o salir. Al entrar a un nivel la música cambia con crossfade (no se corta). MenuManager autónomo. | UI | *MenuManager.cs. CanvasGroup fade 0.4s (unscaledDeltaTime). ESC: panelesCerrablesConEsc.* |
+| **F-061** | **Pausa** | Tiempo congelado. Reanudar, Reintentar, Opciones (sonido), Controles, Menú Principal. ESC reanuda directo. | UI | *Sin penalización por pausar. Panel de controles (panelControles) entre las pestañas; se cierra solo al reanudar.* |
+| **F-062** | **Pantalla de fin de nivel** | Tiempo (mm:ss), muertes del nivel y cristales al completar. Continuar al siguiente. | UI |  |
 | **F-063** | **Pantalla de victoria** | Créditos con puntuación total y contador de muertes. | UI | *Fade-out dorado en Nivel 6.* |
 | **F-064** | **HUD mínimo** | Solo contador de cristales. Sin barra de salud, minimapa ni cooldowns. | UI |  |
 | **F-065** | **Transición de muerte** | SpotlightOverlay con fade-in configurable (default 0.10s). Solo aplica a muerte por hazard. Muerte por vacío: sin transición visual, reinicio directo. | UI |  |
@@ -1241,8 +1307,37 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-078** | **Música — Jungla** | Loop ambiental. Sonidos naturales + percusión suave. Nivel 1. | Audio | *Sin melodía dominante.* |
 | **F-079** | **Música — Templo** | Drones oscuros + percusión lenta. Niveles 2–5. | Audio | *Volumen se reduce en alta tensión.* |
 | **F-080** | **Música — Jefe Final** | Pieza diferenciada. Más rítmica, mayor intensidad. | Audio |  |
+| **▌ SISTEMAS DE EVENTO Y PROGRESIÓN** |
+| **F-081** | **Pinchos en secuencia manual** | Cada pincho retráctil suelto puede coordinarse a mano combinando `faseInicial` (0–1) y `delayInicial` (espera oculta) — ambos se combinan. Permite armar cascadas/ondas sin SpikeGroup. | Entorno | *SpikeHazard.cs — antes delayInicial anulaba faseInicial.* |
+| **F-082** | **Reliquia disparadora** | Ídolo recolectable por proximidad que dispara un UnityEvent una sola vez al recogerse. Cablea las consecuencias de una escena scriptada. | Eventos | *RelicaPickup.cs. Escena Nivel 5.* |
+| **F-083** | **Objeto activable** | Pared/terreno/trampa que se enciende o apaga por evento (Collider2D + Renderer). Estado inicial y animación de aparición configurables. | Eventos | *ObjetoActivable.cs. Activar/Desactivar/Alternar.* |
+| **F-084** | **Roca rodante** | Roca estilo Indiana Jones: dormida hasta activarse, cae y rueda horizontalmente. Contacto = reinicio; aplasta a la Momia. | Entorno | *RollingBoulder.cs. Distinta de la Roca Cayente (F-033).* |
+| **F-085** | **Cambio de skin del jugador** | Intercambia el RuntimeAnimatorController del jugador a una variante (Override Controller recomendado), conservando animaciones. Tinte opcional. | Eventos | *PlayerSkinSwapper.cs. PlayerItem.controller.* |
+| **F-086** | **Selector de niveles con progresión** | Pantalla de selección con desbloqueo por progresión (PlayerPrefs). Botones que intercambian sprite normal/bloqueado. Nivel 1 siempre desbloqueado. | UI | *SelectorNiveles.cs + ProgresoNiveles.cs. Desbloqueo escrito por GameLoopManager.NivelCompleto().* |
 
 **Changelog del Registro**
+
+**Sesión 14***   Jun 2026  —  Persistencia de cristales, fin de nivel, audio centralizado y UI (v5.6)*
+
+**→  **Cristales persistentes (F-055, F-057, Secciones 9.2/9.4): los cristales ya recogidos **no reaparecen al morir** (HashSet por posición en `GameLoopManager`). Reinician solo con R o al cambiar de nivel. Reemplaza el comportamiento anterior ("reaparecen todos"). El checkpoint ya no restaura cristales.
+
+**→  **Panel de fin de nivel con tres datos (F-059, F-062): tiempo (mm:ss), muertes del nivel y cristales, en textos separados (`txtTiempoPanel` / `txtMuertesPanel` / `txtCristalesPanel`).
+
+**→  **Doble contador de muertes (F-056): global de la partida (HUD + victoria) y por nivel (panel de fin de nivel, se resetea al entrar a un nivel nuevo o Reintentar).
+
+**→  **Audio centralizado (F-060, F-078–F-080, Sección 8.3): `AudioManager` pasa a ser autoridad de música por escena (array `musicaPorEscena` por buildIndex, suscrito a sceneLoaded). `PlayMusic` **idempotente** → la música no se reinicia al morir ni entre escenas de la misma zona; crossfade entre zonas. Se configura una sola vez desde el menú. `GameLoopManager` y `MenuManager` ya no gestionan música.
+
+**→  **UI de menús: panel de **controles** integrado a la pausa (referencia en `GameLoopManager`, switching por pestañas en Inspector); **ESC** cierra el panel abierto en el menú principal (`MenuManager.panelesCerrablesConEsc`).
+
+**Sesión 13***   Jun 2026  —  Selector de niveles, sistemas de evento y secuencia de pinchos (v5.5)*
+
+**→  **Selector de niveles con progresión (F-086, Sección 9.5): `SelectorNiveles.cs` + `ProgresoNiveles.cs` (PlayerPrefs). Desbloqueo escrito por `GameLoopManager.NivelCompleto()`. Botones que intercambian sprite normal/bloqueado. Nivel 1 siempre desbloqueado (`siempreDesbloqueado` + garantía en ProgresoNiveles).
+
+**→  **Sistemas de evento / escenas scriptadas (F-082–F-085, Sección 4.6): `RelicaPickup` (disparador por UnityEvent), `ObjetoActivable` (encender/apagar paredes-trampas), `RollingBoulder` (roca rodante Indiana Jones), `PlayerSkinSwapper` (cambio de skin por Override Controller). Para la escena del Nivel 5. Reemplazan al `SecuenciaEventos` (orquestador temporizado) que fue retirado.
+
+**→  **Pinchos en secuencia manual (F-081, F-030, Sección 4.2): `faseInicial` y `delayInicial` ahora se combinan en `SpikeHazard.cs` (antes el delay anulaba la fase). Permite armar cascadas con pinchos sueltos sin SpikeGroup.
+
+**→  **`PlayerItem.controller`: controller de variante del jugador con los clips `ITEM_*`. Se le agregaron los 7 parámetros del Animator del Player (IsRunning, IsGrounded, IsHanging, VelocityY, IsClimbing, Death, IsDead).
 
 **Sesión 12***   Jun 2026  —  Auditoría de sincronización código↔GDD (v5.4)*
 
@@ -1495,8 +1590,9 @@ Patrullero físico por rebote (sin waypoints) con salto y detección por línea 
 | Consecuencia de daño | Reinicio inmediato del nivel | Cualquier contacto con enemigo, proyectil o trampa. |
 | Duración fade-out de muerte | < 0.5s | Transición visual antes del reinicio. |
 | Tiempo de vuelta al nivel | < 2s | Desde la muerte hasta estar jugando de nuevo. |
-| Cristales al reiniciar | Reaparecen todos | El contador vuelve a cero. |
-| Contador de muertes | Acumulativo en la sesión | Visible en HUD (opcional) y en pantalla de victoria. |
+| Cristales al morir | Se conservan | Los ya recogidos no reaparecen; el contador se mantiene. |
+| Cristales al reiniciar (R) / cambiar nivel | Reaparecen todos | El contador vuelve a cero. |
+| Contador de muertes | Global de la partida (HUD + victoria) + por nivel (panel de fin de nivel) | El global es acumulativo; el por nivel se resetea al entrar a un nivel nuevo o Reintentar. |
 
 **15.6 Audio — Prioridades**
 
@@ -1548,4 +1644,4 @@ Patrullero físico por rebote (sin waypoints) con salto y detección por línea 
 | Golem — Fase 2 | 48×64 px mín. | Crack visible, ojos brillantes | — |
 | Golem — muerte | 48×64 px mín. | — | 10–12f, colapso de piedra |
 
-*Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.4  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*
+*Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.6  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*

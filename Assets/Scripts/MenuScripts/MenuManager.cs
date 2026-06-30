@@ -11,6 +11,31 @@ public class MenuManager : MonoBehaviour
     [SerializeField] private CanvasGroup fadePanel;
     [SerializeField] private float tiempoFade = 0.4f;
 
+    [Header("Cerrar con ESC")]
+    [Tooltip("Paneles que ESC cierra si están abiertos (p. ej. el panel de opciones). El primero que esté activo se cierra.")]
+    [SerializeField] private GameObject[] panelesCerrablesConEsc;
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+            CerrarMenuAbierto();
+    }
+
+    // Cierra el primer panel abierto de la lista (ESC en el menú principal).
+    private void CerrarMenuAbierto()
+    {
+        if (panelesCerrablesConEsc == null) return;
+
+        foreach (var panel in panelesCerrablesConEsc)
+        {
+            if (panel != null && panel.activeSelf)
+            {
+                panel.SetActive(false);
+                return;   // cierra uno por pulsación, no todos a la vez
+            }
+        }
+    }
+
     // ── Botones ───────────────────────────────────────────────────
 
     public void IniciarJuego()
@@ -47,7 +72,7 @@ public class MenuManager : MonoBehaviour
     private IEnumerator CargarEscena(int indice)
     {
         yield return StartCoroutine(FadeOut());
-        AudioManager.instance?.StopMusic();
+        // No cortamos la música: el destino reclama su pista con crossfade (PlayMusic).
         SceneManager.LoadScene(indice);
     }
 

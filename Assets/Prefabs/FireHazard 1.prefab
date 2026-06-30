@@ -172,6 +172,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   modo: 0
   desfase: 0
+  iniciarPrendido: 0
   tiempoInactivo: 2
   tiempoCreciendo: 1
   tiempoActivo: 1.5
@@ -185,5 +186,5 @@ MonoBehaviour:
   - {fileID: -5211542447093168656, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
   - {fileID: 8241909526310509498, guid: 9126acc0c3f7e2945a64c619c9724ba4, type: 3}
   tiempoEntreFramesCulmine: 0.5
-  alturaMaxima: 2
+  alturaMaxima: 2.5
   anchoBase: 0.8

@@ -1,7 +1,10 @@
 {
     "name": "TemploUtaki.Editor",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "TemploUtaki",
+        "UnityEngine.UI"
+    ],
     "includePlatforms": [
         "Editor"
     ],

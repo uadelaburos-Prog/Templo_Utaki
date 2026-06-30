@@ -103,9 +103,9 @@ TextureImporter:
       name: plataforma_jungla_1
       rect:
         serializedVersion: 2
-        x: 1
+        x: 2
         y: 4
-        width: 22
+        width: 20
         height: 4
       alignment: 2
       pivot: {x: 0.5, y: 1}

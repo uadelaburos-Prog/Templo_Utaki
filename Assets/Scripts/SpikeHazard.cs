@@ -31,7 +31,7 @@ public class SpikeHazard : MonoBehaviour
     [SerializeField, Range(0.05f, 0.5f)] private float fraccionAsomando = 0.25f;
     [Tooltip("Desfase del ciclo (0–1). Desincroniza pinchos del mismo grupo.")]
     [SerializeField, Range(0f, 1f)] private float faseInicial  = 0f;
-    [Tooltip("Espera inicial antes del primer ciclo (anula faseInicial si > 0).")]
+    [Tooltip("Espera inicial (seg) retraído antes del primer ciclo. Se combina con faseInicial: tras la espera, arranca en el punto del ciclo que marque la fase.")]
     [SerializeField] private float delayInicial = 0f;
 
     // Estados internos: los 3 de espera + 3 de movimiento entre ellos
@@ -44,6 +44,8 @@ public class SpikeHazard : MonoBehaviour
     private Vector2     _posRetraida;
     private Rigidbody2D _rb;
     private Collider2D  _col;
+    // True mientras corre la espera delayInicial: al terminar arranca en faseInicial.
+    private bool        _esperaInicialPendiente;
 
     // ── Init (llamado por SpikeGroup) ────────────────────────────────
     public void Init(SpikeMode nuevoModo, DireccionSalida dirSalida,
@@ -97,8 +99,20 @@ public class SpikeHazard : MonoBehaviour
 
     private void IniciarCiclo()
     {
-        if (delayInicial > 0f) { EntrarRetraido(delayInicial); return; }
+        // Espera oculto delayInicial; al terminar arranca en el punto de faseInicial.
+        if (delayInicial > 0f)
+        {
+            _esperaInicialPendiente = true;
+            EntrarRetraido(delayInicial);
+            return;
+        }
 
+        ArrancarEnFase();
+    }
+
+    // Coloca el pincho en el estado/posición correspondiente a faseInicial y arranca el ciclo.
+    private void ArrancarEnFase()
+    {
         float ciclo = tiempoRetraido + tiempoAsomando + tiempoExtendido;
         float t     = faseInicial * ciclo;
 
@@ -150,7 +164,19 @@ public class SpikeHazard : MonoBehaviour
         {
             case Estado.Retraido:
                 _timer -= Time.deltaTime;
-                if (_timer <= 0f) _estado = Estado.SaliendoTip;
+                if (_timer <= 0f)
+                {
+                    // Si era la espera inicial, arranca en faseInicial; si no, ciclo normal.
+                    if (_esperaInicialPendiente)
+                    {
+                        _esperaInicialPendiente = false;
+                        ArrancarEnFase();
+                    }
+                    else
+                    {
+                        _estado = Estado.SaliendoTip;
+                    }
+                }
                 break;
 
             case Estado.Asomando:
