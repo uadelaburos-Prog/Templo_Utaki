@@ -138,7 +138,7 @@ MonoBehaviour:
   velocidadMax: 18
   maxCargaTiempo: 1.5
   offsetPortada: {x: 1, y: -0.5}
-  rozamientoSuelo: 80
+  rozamientoSuelo: 4
   barraRoot: {fileID: 0}
   barraImagen: {fileID: 0}
   sfxRecoger: {fileID: 0}

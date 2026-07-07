@@ -1,0 +1,258 @@
+========================================================================
+ GUIA DE IMPLEMENTACION - JEFE FINAL "EL GOLEM MARIONETA" (Idea A)
+ Templo Utaki - Nivel 6 - GDD v5.6
+ Documento de trabajo (GD/Prog) - Requiere review de Bonio antes de cerrar
+========================================================================
+
+LA IDEA EN UNA LINEA
+--------------------
+Golem gigante ESTATICO. Ataca con patrones telegrafiados; entre ataque y
+ataque queda "cansado" y se ilumina un punto debil. El jugador se engancha
+a ese punto y TIRA CON S hasta arrancarlo. 3 puntos = 3 golpes = victoria.
+
+
+QUE HAY QUE CONSTRUIR
+---------------------
+Solo 2 scripts nuevos:
+  - PuntoDebilGolem  (copia recortada de ReactiveWall.cs)
+  - GolemBoss        (maquina de estados por corrutina)
+
+Se reusan SIN TOCAR:
+  - LauncherAI / Projectile  (proyectiles)
+  - RollingBoulder           (rocas que caen)
+  - FragilePlatform          (plataformas que colapsan en fase 2)
+  - GrappleScript            (el gancho, ya soporta tirar con S)
+  - GameLoopManager          (victoria, fade, contador de muertes)
+
+Convenciones del proyecto a respetar:
+  - Fisica en FixedUpdate, input en Update (nunca mezclar)
+  - Valores de diseno en [SerializeField] private, con [Header]
+  - Cachear componentes en Awake
+  - Nunca Transform.Translate, usar Rigidbody2D
+
+
+========================================================================
+ SCRIPT 1 - PuntoDebilGolem
+========================================================================
+REGLA DE ORO: se construye COPIANDO ReactiveWall.cs y cambiando lo minimo.
+No escribirlo de cero. ReactiveWall ya resuelve lo dificil: implementa
+IHookable, cachea Rigidbody/Collider en Awake, guarda la posicion inicial
+y detecta el desplazamiento al tirar.
+
+CAMPOS (todos [SerializeField] private, con [Header])
+  - Referencia al GolemBoss (para avisarle cuando lo rompen)
+  - Distancia de arranque: cuanto hay que tirar para romperlo
+    (equivale a distanciaDerribo de ReactiveWall)
+  - Dos colores: apagado (gris) y ventana (dorado)
+
+CAMPOS PRIVADOS INTERNOS (cacheados)
+  - Rigidbody2D, Collider2D, SpriteRenderer
+  - Posicion inicial
+  - Flag "soy vulnerable ahora"
+  - Flag "ya estoy roto"
+
+METODOS Y DONDE VA CADA COSA
+  Awake:
+    - Cachear los tres componentes
+    - Poner gravedad en 0
+    - Guardar posicion inicial
+    - Dejar el punto CERRADO (llamar al metodo Cerrar)
+    (casi identico a ReactiveWall.Awake)
+
+  FixedUpdate (comprobacion de fisica):
+    - Si no soy vulnerable o ya estoy roto -> salir
+    - Si no, comparar distancia entre posicion actual y la inicial;
+      si supera la distancia de arranque -> Romper
+    (esto ya esta en ReactiveWall casi igual; solo cambia que en vez de
+     "derribar" llama a "romper")
+
+  Metodo publico "Abrir" (lo llama el Golem):
+    - Marca vulnerable
+    - Activa el collider
+    - Pone color dorado
+    - Resetea posicion
+    - Libera las constraints del Rigidbody para que la traccion lo mueva
+
+  Metodo publico "Cerrar" (lo contrario):
+    - Desactiva el collider (asi el gancho ya no lo engancha)
+    - Color gris
+    - Frena el Rigidbody y lo vuelve a congelar
+
+  Metodo privado "Romper":
+    - Marca roto
+    - Desactiva el collider
+    - Cambia al sprite/color de roto
+    - Llama al metodo del Golem "recibi un golpe"
+
+  OnHooked / OnReleased (de la interfaz IHookable):
+    - OnHooked puede quedar VACIO: la fuerza de tirar con S ya la aplica
+      el gancho solo
+    - OnReleased: frenar el Rigidbody y devolver el punto a su posicion
+      (para que soltar sin romperlo no lo deje a medio arrancar)
+
+LO UNICO QUE HAY QUE ENTENDER BIEN
+  El encendido/apagado del collider es lo que hace que solo se pueda
+  enganchar durante la ventana. Con el collider apagado, el rayo del gancho
+  lo atraviesa y no lo agarra. Ese es todo el truco.
+
+SETUP EN LA ESCENA (por cada uno de los 3 puntos)
+  - GameObject hijo del Golem
+  - Tag "Hookable" + Layer "Hookable"  <-- OBLIGATORIO: activa el modo
+    traccion del gancho
+  - Rigidbody2D (Dynamic, gravityScale 0)
+  - Collider2D (Circle) + SpriteRenderer (cristal-runa dorado)
+  - Script PuntoDebilGolem, con su referencia al Golem asignada
+
+
+========================================================================
+ SCRIPT 2 - GolemBoss
+========================================================================
+Es nuevo pero simple: un bucle con temporizador. La herramienta clave es
+una CORRUTINA (IEnumerator + StartCoroutine), que permite escribir
+"hace esto, espera, despues esto" de forma lineal.
+
+CAMPOS ([SerializeField] private, con [Header])
+  - Array con los 3 puntos debiles, EN ORDEN
+  - Arrays de ataques a reusar: los LauncherAI y las RollingBoulder
+  - Dos tiempos: duracion de cada ataque y duracion de la ventana
+
+CAMPOS PRIVADOS
+  - Vida (entero)
+  - Indice del punto actual
+  - Flag "me golpearon en esta ventana"
+
+ESTRUCTURA POR METODOS
+  Start:
+    - Poner vida = cantidad de puntos
+    - Lanzar la corrutina principal con StartCoroutine
+
+  Corrutina principal (el bucle):
+    Mientras la vida sea mayor a 0, repetir:
+      1. Ejecutar la corrutina de atacar y ESPERAR a que termine
+         (yield return StartCoroutine(...))
+      2. Poner el flag "golpeado" en falso y decirle al punto de turno
+         que ABRA
+      3. Esperar: bucle pequeno que cuenta el tiempo (yield return null
+         frame a frame) hasta que se acabe la ventana O el flag golpeado
+         se ponga en verdadero
+      4. Si termino la ventana sin golpe, decirle al punto que CIERRE
+    Cuando la vida llega a 0, salir del bucle y llamar a Victoria.
+
+  Corrutina de atacar:
+    - Decidir si es fase 2 (cuando queda 1 de vida)
+    - Encender los lanzadores, esperar la duracion del ataque, apagarlos
+    - En fase 2: ademas activar rafagas y el colapso de plataformas
+      fragiles
+
+  Metodo publico "recibi un golpe" (lo llama el punto debil al romperse):
+    - Poner el flag golpeado en verdadero
+    - Bajar la vida en 1
+    - Avanzar el indice al siguiente punto
+    - Disparar efectos de cambio de fase (rugido, flash)
+
+  Metodo "Victoria":
+    - Animacion de colapso dorado
+    - Llamar al metodo de fin de nivel de GameLoopManager
+      (confirmar el nombre real del accessor del singleton en el script)
+
+EL CONCEPTO QUE HAY QUE DOMINAR
+  La corrutina como linea de tiempo. En vez de meter contadores e "if"
+  sueltos en Update, la corrutina se lee de arriba a abajo como una receta:
+  "atacá, abrí ventana, esperá, cerrá, repetí". El yield return es "pausá
+  acá y segui el proximo frame". Con eso, todo el ritmo del jefe queda en
+  un solo metodo legible.
+
+
+========================================================================
+ COMO SE COMUNICAN LOS DOS SCRIPTS
+========================================================================
+Relacion en dos direcciones, ambas por REFERENCIA DIRECTA asignada en el
+Inspector (no Find, no singletons):
+  - Golem  -> puntos: los tiene en su array y les llama Abrir/Cerrar
+  - Puntos -> Golem:  cada uno tiene la referencia al Golem y le llama
+                      "recibi un golpe"
+No hace falta ningun manager central ni eventos globales.
+
+
+========================================================================
+ LAS DOS FASES (segun GDD F-051 / F-052)
+========================================================================
+FASE 1 (puntos 1 y 2): ataques lentos y predecibles.
+  Alternar dos patrones simples, por ejemplo:
+    - "Abanico": 3 proyectiles lentos
+    - "Martillo": caen 2 rocas
+  Entre cada uno, ventana de punto debil.
+
+FASE 2 (punto 3): sube la cadencia (rafagas en vez de disparos sueltos) y
+  empiezan a caer las plataformas fragiles, achicando el espacio seguro.
+  La ventana final es un poco mas corta = climax.
+
+SIN TEXTO (obligatorio por GDD): todo se comunica visualmente.
+  - Ataque inminente -> pose de anticipacion + ojos brillando
+  - Ventana abierta  -> punto debil dorado y parpadeando
+
+
+========================================================================
+ ARMADO EN LA ESCENA (Nivel 6)
+========================================================================
+1. GameObject "Golem" estatico con el script GolemBoss + sprite grande
+2. 3 hijos "PuntoDebil_1/2/3" con PuntoDebilGolem, cada uno apuntando al
+   Golem
+3. En el Inspector del Golem, arrastrar: los 3 puntos EN ORDEN, los
+   LauncherAI de la arena y las RollingBoulder
+4. Conectar el paso de victoria con el metodo de fin de nivel de
+   GameLoopManager (fade dorado, pantalla de victoria, contador de muertes)
+
+
+========================================================================
+ ORDEN DE CONSTRUCCION RECOMENDADO
+========================================================================
+1. PRIMERO PuntoDebilGolem (copiando ReactiveWall) y probarlo solo:
+   ponerlo en la escena, engancharlo, tirar con S, ver que se "rompe"
+   (por ahora que solo imprima algo en consola). Si esto anda, lo mas
+   dificil ya esta.
+2. DESPUES GolemBoss con el bucle, pero SIN ataques: solo abrir/cerrar
+   ventanas y contar golpes hasta la victoria. Verificar el loop de 3
+   golpes.
+3. AL FINAL enchufar los ataques (lanzadores, rocas, fragiles): solo
+   activar/desactivar componentes existentes.
+4. Tuneo de los tres numeros.
+
+Construir en ese orden evita depurar todo junto: cada paso se prueba
+aislado antes de sumar el siguiente.
+
+
+========================================================================
+ CHECKLIST DE PRUEBA (QA / Santiago)
+========================================================================
+[ ] Fuera de ventana: el punto esta gris y NO se puede enganchar
+[ ] En ventana: brilla, el gancho lo agarra y tirar con S lo arranca
+[ ] Soltar sin romperlo -> vuelve a su lugar
+[ ] 3 golpes -> victoria
+[ ] Tocar proyectil o roca -> reinicio de arena (ya lo hace GameLoopManager)
+[ ] Ajustar 3 numeros hasta que se sienta justo:
+      - duracion de la ventana
+      - distancia de arranque
+      - duracion del ataque
+
+
+========================================================================
+ REPARTO
+========================================================================
+Prog (Fermin/Eliel):
+  1ro PuntoDebilGolem (copiando ReactiveWall)
+  2do GolemBoss como bucle de temporizador
+  (nada de fisica nueva)
+Arte (Belen):
+  Golem idle/ataque/fase 2/muerte + los 3 puntos debiles
+  (ya listados en la seccion 15 del GDD)
+QA (Santiago):
+  Tuneo de los tres numeros
+
+
+========================================================================
+ IMPORTANTE
+========================================================================
+- Estos son lineamientos de construccion, no codigo final.
+
+========================================================================

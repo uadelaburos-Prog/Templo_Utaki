@@ -40,7 +40,9 @@ public class KeyItem : MonoBehaviour
     [SerializeField] private AudioClip sfxRecoger;
     [SerializeField] private AudioClip sfxLanzar;
 
-    public bool EsPortada => _estado == Estado.Portada;
+    // Solo cuenta como "portada" para la puerta cuando la lleva el JUGADOR.
+    // Mientras la porta un enemigo el estado también es Portada, pero no debe abrir puertas.
+    public bool EsPortada => _estado == Estado.Portada && _portadaPorJugador;
 
     private enum Estado { EnSuelo, Portada, EnVuelo }
     private Estado _estado = Estado.EnSuelo;
@@ -53,6 +55,7 @@ public class KeyItem : MonoBehaviour
     private float         _chargeTimer;
     private bool          _cargando;
     private float         _cooldownPickup;
+    private bool          _portadaPorJugador;   // true solo mientras la lleva el jugador (habilita apertura de puertas)
     private Vector2       _posicionOrigen;
     private Quaternion    _rotacionOrigen;
 
@@ -172,6 +175,7 @@ public class KeyItem : MonoBehaviour
     private void Recoger()
     {
         _estado            = Estado.Portada;
+        _portadaPorJugador = true;
         _rb.bodyType       = RigidbodyType2D.Kinematic;
         _rb.linearVelocity = Vector2.zero;
         _col.enabled       = false;
@@ -188,6 +192,7 @@ public class KeyItem : MonoBehaviour
     private void Lanzar(float fraccionCarga)
     {
         _estado            = Estado.EnVuelo;
+        _portadaPorJugador = false;
         _rb.bodyType       = RigidbodyType2D.Dynamic;
         _col.enabled       = true;
         _cooldownPickup    = cooldownRecoger;
@@ -218,6 +223,7 @@ public class KeyItem : MonoBehaviour
 
         // Reaparece limpia en el origen, lista para caer y asentarse
         enabled             = true;   // reactiva Update si la portaba un enemigo
+        _portadaPorJugador  = false;
         transform.position  = _posicionOrigen;
         transform.rotation  = _rotacionOrigen;
         _estado             = Estado.EnVuelo;
@@ -231,6 +237,7 @@ public class KeyItem : MonoBehaviour
     // Llamado por KeyDoor al abrir — consume la llave
     public void Consumir()
     {
+        _portadaPorJugador = false;
         if (_grapple != null) _grapple.enabled = true;
         gameObject.SetActive(false);
     }
@@ -239,6 +246,7 @@ public class KeyItem : MonoBehaviour
     public void IniciarPortadaEnemigo()
     {
         _estado            = Estado.Portada;
+        _portadaPorJugador = false;   // la porta un enemigo, NO el jugador → no abre puertas
         _rb.bodyType       = RigidbodyType2D.Kinematic;
         _rb.linearVelocity = Vector2.zero;
         _col.enabled       = false;

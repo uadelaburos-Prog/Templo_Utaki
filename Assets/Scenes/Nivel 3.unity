@@ -104059,7 +104059,7 @@ PrefabInstance:
       objectReference: {fileID: 448569957}
     - target: {fileID: 5257209481771545022, guid: 27421eccc1e2d594e9d7a47766a63a34, type: 3}
       propertyPath: rozamientoSuelo
-      value: -16
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 6075422542228434505, guid: 27421eccc1e2d594e9d7a47766a63a34, type: 3}
       propertyPath: m_LocalPosition.x
