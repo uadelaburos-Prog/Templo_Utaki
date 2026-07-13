@@ -15,6 +15,18 @@ public class MenuManager : MonoBehaviour
     [Tooltip("Paneles que ESC cierra si están abiertos (p. ej. el panel de opciones). El primero que esté activo se cierra.")]
     [SerializeField] private GameObject[] panelesCerrablesConEsc;
 
+    [Header("Inicio de juego")]
+    [Tooltip("Escena a cargar al pulsar 'Jugar'. La cinemática de intro se encarga luego de ir al selector.")]
+    [SerializeField] private string escenaAlJugar = "Intro";
+
+    private void Awake()
+    {
+        // Confinar el cursor a la ventana desde la escena de entrada (el menú es autónomo,
+        // sin GameLoopManager). El estado del cursor persiste entre escenas.
+        Cursor.lockState = CursorLockMode.Confined;
+        Cursor.visible   = true;
+    }
+
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape))
@@ -40,16 +52,16 @@ public class MenuManager : MonoBehaviour
 
     public void IniciarJuego()
     {
-        StartCoroutine(CargarEscena(1));
+        StartCoroutine(CargarEscena(escenaAlJugar));
     }
 
     /// <summary>
-    /// Carga un nivel específico pasando su índice de Build Settings.
-    /// Ideal para usar con botones de selección de nivel en el Inspector.
+    /// Carga una escena específica pasando su NOMBRE (debe estar en Build Settings).
+    /// Ideal para cablear botones desde el Inspector.
     /// </summary>
-    public void IrANivel(int indice)
+    public void IrANivel(string nombreEscena)
     {
-        StartCoroutine(CargarEscena(indice));
+        StartCoroutine(CargarEscena(nombreEscena));
     }
 
     public void AbrirOpciones()
@@ -69,11 +81,11 @@ public class MenuManager : MonoBehaviour
 
     // ── Transición ────────────────────────────────────────────────
 
-    private IEnumerator CargarEscena(int indice)
+    private IEnumerator CargarEscena(string nombreEscena)
     {
         yield return StartCoroutine(FadeOut());
         // No cortamos la música: el destino reclama su pista con crossfade (PlayMusic).
-        SceneManager.LoadScene(indice);
+        SceneManager.LoadScene(nombreEscena);
     }
 
     private IEnumerator CargarSalida()

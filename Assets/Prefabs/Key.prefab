@@ -138,9 +138,23 @@ MonoBehaviour:
   velocidadMax: 18
   maxCargaTiempo: 1.5
   offsetPortada: {x: 1, y: -0.5}
-  rozamientoSuelo: 4
+  rozamientoSuelo: 5
+  maskSolidos:
+    serializedVersion: 2
+    m_Bits: 512
+  iteracionesDesincrustacion: 8
   barraRoot: {fileID: 0}
   barraImagen: {fileID: 0}
+  mostrarTrayectoria: 1
+  maxPuntosTrayectoria: 32
+  espaciadoPunteado: 0.35
+  grosorPunteado: 0.12
+  colorTrayectoria: {r: 1, g: 0.25, b: 0.2, a: 0.8}
+  tiempoTrayectoria: 1.2
+  maskTrayectoria:
+    serializedVersion: 2
+    m_Bits: 0
+  sortingLayerTrayectoria: Player
   sfxRecoger: {fileID: 0}
   sfxLanzar: {fileID: 0}
 --- !u!61 &1608289152676912999

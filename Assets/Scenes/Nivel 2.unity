@@ -62782,11 +62782,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 71.2
+      value: 69.36
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 12.9
+      value: 8.1
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.z
@@ -65437,11 +65437,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -3399500986034830657, guid: 9a92d52819e6fdb449c081bd2085abea, type: 3}
       propertyPath: orbitRadius
-      value: 5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -3399500986034830657, guid: 9a92d52819e6fdb449c081bd2085abea, type: 3}
       propertyPath: orbitVelocity
-      value: 1
+      value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: -3399500986034830657, guid: 9a92d52819e6fdb449c081bd2085abea, type: 3}
       propertyPath: radioAbandonar
@@ -123207,11 +123207,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 82.71
+      value: 81.12
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 17.38
+      value: 18.97
       objectReference: {fileID: 0}
     - target: {fileID: 7485149795079165662, guid: dcbf4806048cca241970822f792892f5, type: 3}
       propertyPath: m_LocalPosition.z

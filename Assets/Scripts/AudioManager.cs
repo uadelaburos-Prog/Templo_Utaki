@@ -9,9 +9,21 @@ public class AudioManager : MonoBehaviour
     [SerializeField] private AudioSource FxObject;
     [SerializeField] private AudioSource audioSource;
 
+    [System.Serializable]
+    private struct MusicaEscena
+    {
+        [Tooltip("Nombre EXACTO de la escena (debe estar en Build Settings).")]
+        public string    nombreEscena;
+        [Tooltip("Clip a reproducir en esa escena. Dejar vacío = silencio en esa escena.")]
+        public AudioClip clip;
+    }
+
     [Header("Música por escena")]
-    [Tooltip("Música de TODO el juego, indexada por buildIndex: [0]=menú, [1]=N1, [2..5]=niveles, etc. Asignar EL MISMO clip a varias escenas de la misma zona evita que la música se reinicie al pasar entre ellas. Se configura una sola vez desde el menú (este AudioManager persiste entre escenas).")]
-    [SerializeField] private AudioClip[] musicaPorEscena;
+    [Tooltip("Música de TODO el juego, por NOMBRE de escena. Asignar EL MISMO clip a varias " +
+             "escenas de la misma zona evita que la música se reinicie al pasar entre ellas. " +
+             "Una escena sin entrada aquí no cambia la música (sigue sonando la anterior). " +
+             "Se configura una sola vez desde el menú (este AudioManager persiste entre escenas).")]
+    [SerializeField] private MusicaEscena[] musicaPorEscena;
 
     [Header("Volumen — valores por defecto (0–1)")]
     [Tooltip("Volúmenes la PRIMERA vez que se juega. Después mandan los valores guardados en PlayerPrefs (los sliders).")]
@@ -44,7 +56,7 @@ public class AudioManager : MonoBehaviour
             SceneManager.sceneLoaded += OnSceneLoaded;
             // Reproducir la música de la escena en la que nace (sceneLoaded no se
             // dispara para la escena ya activa al momento de suscribirse).
-            ReproducirMusicaDeEscena(SceneManager.GetActiveScene().buildIndex);
+            ReproducirMusicaDeEscena(SceneManager.GetActiveScene().name);
         }
         else
         {
@@ -70,19 +82,25 @@ public class AudioManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        ReproducirMusicaDeEscena(scene.buildIndex);
+        ReproducirMusicaDeEscena(scene.name);
     }
 
-    // Elige la pista del array según el buildIndex y la reproduce (idempotente:
-    // si es el mismo clip que ya suena —misma zona o recarga por muerte— no reinicia).
-    private void ReproducirMusicaDeEscena(int buildIndex)
+    // Elige la pista según el NOMBRE de escena y la reproduce (idempotente: si es el mismo
+    // clip que ya suena —misma zona o recarga por muerte— no reinicia). Si la escena no
+    // tiene entrada, no toca la música (sigue sonando la anterior).
+    private void ReproducirMusicaDeEscena(string nombreEscena)
     {
-        if (musicaPorEscena == null || buildIndex < 0 || buildIndex >= musicaPorEscena.Length)
-            return;
+        if (musicaPorEscena == null) return;
 
-        // El volumen ya está aplicado al mixer (CargarVolumenes en Awake) y persiste entre
-        // escenas — no lo pisamos acá para respetar el valor elegido en el slider.
-        PlayMusic(musicaPorEscena[buildIndex]);   // null → detiene la música
+        foreach (MusicaEscena m in musicaPorEscena)
+        {
+            if (m.nombreEscena != nombreEscena) continue;
+
+            // El volumen ya está aplicado al mixer (CargarVolumenes en Awake) y persiste
+            // entre escenas — no lo pisamos acá para respetar el valor del slider.
+            PlayMusic(m.clip);   // null → detiene la música
+            return;
+        }
     }
 
     // ── VOLUMEN ───────────────────────────────────────────────────

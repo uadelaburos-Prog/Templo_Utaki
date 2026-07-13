@@ -14,8 +14,8 @@ public class SelectorNiveles : MonoBehaviour
     private struct BotonNivel
     {
         public Button boton;
-        [Tooltip("Build index de la escena del nivel (debe estar en Build Settings).")]
-        public int    buildIndex;
+        [Tooltip("Nombre EXACTO de la escena del nivel (debe estar en Build Settings).")]
+        public string nombreEscena;
         [Tooltip("Image del botón. Su sprite normal es el de DESBLOQUEADO.")]
         public Image  imagen;
         [Tooltip("Sprite que se muestra cuando el nivel está BLOQUEADO (ej: candado).")]
@@ -59,7 +59,7 @@ public class SelectorNiveles : MonoBehaviour
             BotonNivel n = niveles[i];
             if (n.boton == null) continue;
 
-            bool desbloqueado    = n.siempreDesbloqueado || ProgresoNiveles.EstaDesbloqueado(n.buildIndex);
+            bool desbloqueado    = n.siempreDesbloqueado || ProgresoNiveles.EstaDesbloqueado(n.nombreEscena);
             n.boton.interactable = desbloqueado;
 
             // Desbloqueado → sprite original del botón; bloqueado → spriteBloqueado.
@@ -71,22 +71,22 @@ public class SelectorNiveles : MonoBehaviour
 
             // Limpiamos listeners runtime previos (no afecta los persistentes del Inspector)
             // y cableamos el destino con una captura local para evitar el bug de closure.
-            int destino = n.buildIndex;
+            string destino = n.nombreEscena;
             n.boton.onClick.RemoveAllListeners();
             n.boton.onClick.AddListener(() => CargarNivel(destino));
         }
     }
 
-    // Carga un nivel por build index (ignora si está bloqueado, por seguridad).
-    public void CargarNivel(int buildIndex)
+    // Carga un nivel por nombre de escena (no carga si está bloqueado, por seguridad).
+    public void CargarNivel(string nombreEscena)
     {
-        bool permitido = ProgresoNiveles.EstaDesbloqueado(buildIndex);
+        bool permitido = ProgresoNiveles.EstaDesbloqueado(nombreEscena);
         if (!permitido && niveles != null)
             foreach (BotonNivel n in niveles)
-                if (n.buildIndex == buildIndex && n.siempreDesbloqueado) { permitido = true; break; }
+                if (n.nombreEscena == nombreEscena && n.siempreDesbloqueado) { permitido = true; break; }
 
         if (!permitido) return;
-        StartCoroutine(CargarConFade(buildIndex));
+        StartCoroutine(CargarConFade(nombreEscena));
     }
 
     // Reinicia el progreso y refresca la UI (para un botón de opciones/testing).
@@ -98,11 +98,11 @@ public class SelectorNiveles : MonoBehaviour
 
     // ── PRIVADOS ──────────────────────────────────────────────────
 
-    private IEnumerator CargarConFade(int indice)
+    private IEnumerator CargarConFade(string nombreEscena)
     {
         yield return StartCoroutine(FadeOut());
         // No cortamos la música: el nivel destino reclama su pista con crossfade (PlayMusic).
-        SceneManager.LoadScene(indice);
+        SceneManager.LoadScene(nombreEscena);
     }
 
     private IEnumerator FadeOut()

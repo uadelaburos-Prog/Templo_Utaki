@@ -10,16 +10,21 @@ public class GameLoopManager : MonoBehaviour
 
     [Header("Cristales")]
     [SerializeField] private int cristalesObtenidos = 0;
-    [SerializeField] private int cristalesTotales;
+
+    // Total de cristales del nivel actual — detectado automáticamente al cargar la escena
+    // (cuenta los CrystalPickup presentes), sin configuración manual por nivel.
+    private int cristalesTotales;
 
     [Header("Muerte / Reinicio")]
     [SerializeField] private int   contadorMuertes = 0;
     [SerializeField] private float tiempoFadeOut   = 0.4f;
     [SerializeField] private float tiempoReinicio  = 1.5f;
 
-    [Header("Nivel")]
-    [SerializeField] private int nivelActual;
-    [SerializeField] private int totalNiveles;
+    [Header("Escenas especiales")]
+    [Tooltip("Nombre EXACTO de la escena del menú principal (debe estar en Build Settings).")]
+    [SerializeField] private string escenaMenu = "Menu";
+    [Tooltip("Nombre EXACTO de la escena del cómic de cierre (debe estar en Build Settings). Se carga al completar el último nivel de la campaña.")]
+    [SerializeField] private string escenaFinal = "Final";
 
     [Header("Audio")]
     [SerializeField] private AudioClip sfxMuerte;
@@ -62,8 +67,11 @@ public class GameLoopManager : MonoBehaviour
     // Muertes acumuladas solo en el nivel actual (se resetea al entrar a un nivel nuevo).
     private int     muertesNivel;
 
-    // buildIndex del último nivel cargado — distingue "nivel nuevo" de "recarga por muerte".
-    private int     _nivelAnterior = -1;
+    // Nombre de la escena actual (fuente de verdad; todo el ciclo razona por nombre).
+    private string  _escenaActual = "";
+
+    // Nombre de la última escena cargada — distingue "nivel nuevo" de "recarga por muerte".
+    private string  _escenaAnterior = "";
 
     // Cristales ya recogidos en el nivel actual (clave = nivel + posición inicial).
     // Persiste entre recargas (DontDestroyOnLoad) para que no reaparezcan al morir.
@@ -72,7 +80,7 @@ public class GameLoopManager : MonoBehaviour
     // Estado del checkpoint — persiste entre recargas de escena (DontDestroyOnLoad)
     private Vector3 _checkpointPos;
     private bool    _checkpointActivo;
-    private int     _checkpointScena = -1;
+    private string  _checkpointScena = "";
 
     // ── LIFECYCLE ─────────────────────────────────────────────────
 
@@ -86,6 +94,11 @@ public class GameLoopManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // El gancho se apunta con el mouse: confinar el cursor a la ventana del juego
+        // para que no se escape en la build (un click afuera hace perder el foco).
+        Cursor.lockState = CursorLockMode.Confined;
+        Cursor.visible   = true;
     }
 
     private void OnEnable()
@@ -100,10 +113,12 @@ public class GameLoopManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Nivel nuevo = el buildIndex cambió. Una recarga por muerte mantiene el mismo
-        // buildIndex, así que conserva cristales recogidos y muertes acumuladas.
-        bool nivelNuevo     = scene.buildIndex != _nivelAnterior;
-        _nivelAnterior      = scene.buildIndex;
+        string nombre = scene.name;
+
+        // Nivel nuevo = el nombre de escena cambió. Una recarga por muerte mantiene el
+        // mismo nombre, así que conserva cristales recogidos y muertes acumuladas.
+        bool nivelNuevo = nombre != _escenaAnterior;
+        _escenaAnterior = nombre;
 
         if (nivelNuevo)
         {
@@ -111,7 +126,7 @@ public class GameLoopManager : MonoBehaviour
             muertesNivel = 0;
         }
 
-        nivelActual         = scene.buildIndex;
+        _escenaActual       = nombre;
         isDying             = false;
         isPaused            = false;
         IsPaused            = false;
@@ -125,9 +140,10 @@ public class GameLoopManager : MonoBehaviour
         if (panelOpciones  != null) panelOpciones.SetActive(false);
         if (panelControles != null) panelControles.SetActive(false);
 
-        // Al volver al menu (escena 0) el Canvas DDOL del GLM no debe bloquear la UI del menu.
-        // El panel queda oculto de inmediato; el menu maneja su propia presentacion visual.
-        if (scene.buildIndex == 0)
+        // Escenas que NO son niveles jugables (menú, selector, cinemáticas): el GLM
+        // persiste (DDOL) pero no maneja su HUD ni su fade. Ocultamos el panel DDOL para
+        // que no bloquee la UI de esas escenas y salimos.
+        if (!ProgresoNiveles.EsNivelJugable(nombre))
         {
             if (fadePanel != null)
             {
@@ -137,19 +153,23 @@ public class GameLoopManager : MonoBehaviour
             return;
         }
 
+        // Total de cristales del nivel: contar los CrystalPickup de la escena. sceneLoaded
+        // corre ANTES de los Start(), así que los cristales ya recogidos (que se
+        // autodesactivan en su Start) todavía están activos y cuentan para el total.
+        cristalesTotales = FindObjectsByType<CrystalPickup>(FindObjectsSortMode.None).Length;
+
         cristalesObtenidos = _cristalesRecogidos.Count;
         ActualizarHUDCristales();
         ActualizarHUDMuertes();
         StartCoroutine(FadeInConEspera());
-        if (_checkpointActivo && _checkpointScena == scene.buildIndex)
+        if (_checkpointActivo && _checkpointScena == nombre)
             StartCoroutine(AplicarSpawnCheckpoint());
         // La música por escena la maneja AudioManager (suscrito a sceneLoaded).
     }
 
     private void Start()
     {
-        nivelActual  = SceneManager.GetActiveScene().buildIndex;
-        totalNiveles = SceneManager.sceneCountInBuildSettings;
+        _escenaActual = SceneManager.GetActiveScene().name;
 
         ActualizarHUDCristales();
         ActualizarHUDMuertes();
@@ -157,10 +177,10 @@ public class GameLoopManager : MonoBehaviour
 
     private void Update()
     {
-        // No procesar atajos de teclado en la escena del menu (indice 0).
-        // El GameLoopManager persiste entre escenas (DDOL) y su Update correria
-        // en el menu abriendo el panel de pausa sobre los botones del menu.
-        if (nivelActual == 0) return;
+        // Solo procesar atajos en niveles jugables. El GameLoopManager persiste entre
+        // escenas (DDOL); sin esta guarda su Update abriría la pausa sobre el menú, el
+        // selector o las cinemáticas (Intro/Final).
+        if (!ProgresoNiveles.EsNivelJugable(_escenaActual)) return;
 
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))
             TogglePause();
@@ -172,7 +192,7 @@ public class GameLoopManager : MonoBehaviour
 
     // ── GAMEPLAY ──────────────────────────────────────────────────
 
-    // fromVoid: true  → muerte por el vacío (sin dramatismo, reinicio inmediato)
+    // fromVoid: true  → muerte por el vacío (reinicio instantáneo, sin esperas)
     // fromVoid: false → muerte por hazard (animación + spotlight dramático)
     public void PlayerDied(bool fromVoid = false)
     {
@@ -189,7 +209,7 @@ public class GameLoopManager : MonoBehaviour
         AudioManager.instance?.FxSoundEffect(sfxMuerte, transform, 1f);
 
         if (fromVoid)
-            StartCoroutine(RutinaReinicio());
+            StartCoroutine(RutinaReinicio(inmediato: true));
         else
             StartCoroutine(RutinaMuerteDramatica());
     }
@@ -211,10 +231,10 @@ public class GameLoopManager : MonoBehaviour
         return _cristalesRecogidos.Contains(ClaveCristal(posicionInicial));
     }
 
-    // Clave estable entre recargas: nivel + posición inicial redondeada a centésimas.
+    // Clave estable entre recargas: escena + posición inicial redondeada a centésimas.
     private string ClaveCristal(Vector3 pos)
     {
-        return $"{nivelActual}:{Mathf.RoundToInt(pos.x * 100f)}:{Mathf.RoundToInt(pos.y * 100f)}";
+        return $"{_escenaActual}:{Mathf.RoundToInt(pos.x * 100f)}:{Mathf.RoundToInt(pos.y * 100f)}";
     }
 
     // Llamado por CheckpointZone al activarse — guarda posición y cristales actuales
@@ -222,14 +242,14 @@ public class GameLoopManager : MonoBehaviour
     {
         _checkpointPos    = pos;
         _checkpointActivo = true;
-        _checkpointScena  = nivelActual;
+        _checkpointScena  = _escenaActual;
     }
 
     // Usado por CheckpointZone.Start() para restaurar estado visual al recargar
     public bool EsEsteCheckpoint(Vector3 pos)
     {
         return _checkpointActivo
-            && _checkpointScena == nivelActual
+            && _checkpointScena == _escenaActual
             && Vector3.Distance(_checkpointPos, pos) < 0.1f;
     }
 
@@ -240,7 +260,8 @@ public class GameLoopManager : MonoBehaviour
         cristalesAcumulados += cristalesObtenidos;
 
         // Desbloquea el siguiente nivel en el selector (persistido con PlayerPrefs).
-        ProgresoNiveles.DesbloquearHasta(nivelActual + 1);
+        string siguiente = ProgresoNiveles.SiguienteNivel(_escenaActual);
+        if (!string.IsNullOrEmpty(siguiente)) ProgresoNiveles.DesbloquearHasta(siguiente);
 
         ActualizarPanelResultado(tiempoNivel);
 
@@ -258,12 +279,19 @@ public class GameLoopManager : MonoBehaviour
         AudioListener.pause   = false;
         if (panelFinNivel != null) panelFinNivel.SetActive(false);
 
-        int siguienteNivel = nivelActual + 1;
         cristalesObtenidos = 0;
 
-        // Si no hay más niveles, vuelve al menú principal.
-        int destino = siguienteNivel < totalNiveles ? siguienteNivel : 0;
-        nivelActual = destino;
+        // Si acabamos de completar el último nivel de la campaña, vamos a la cinemática
+        // de cierre (todo por nombre, sin depender del orden de Build Settings).
+        if (ProgresoNiveles.EsUltimoNivel(_escenaActual))
+        {
+            StartCoroutine(CargarEscenaConFade(escenaFinal));
+            return;
+        }
+
+        // Siguiente nivel de la campaña; si no hay (no debería pasar aquí), vuelve al menú.
+        string siguiente = ProgresoNiveles.SiguienteNivel(_escenaActual);
+        string destino   = !string.IsNullOrEmpty(siguiente) ? siguiente : escenaMenu;
         StartCoroutine(CargarEscenaConFade(destino));
     }
 
@@ -326,7 +354,7 @@ public class GameLoopManager : MonoBehaviour
         if (panelPausa    != null && isPaused) panelPausa.SetActive(true);
     }
 
-    // Botón "Menú Principal" — carga la escena índice 0
+    // Botón "Menú Principal" — carga la escena del menú por nombre
     public void IrAlMenuPrincipal()
     {
         LimpiarCheckpoint();
@@ -342,13 +370,13 @@ public class GameLoopManager : MonoBehaviour
         StopAllCoroutines();
 
         isDying = false;
-        StartCoroutine(CargarEscenaConFade(0));
+        StartCoroutine(CargarEscenaConFade(escenaMenu));
     }
 
     private void LimpiarCheckpoint()
     {
         _checkpointActivo = false;
-        _checkpointScena  = -1;
+        _checkpointScena  = "";
     }
 
     // Cierra la pausa sin animación (usada antes de cargar escena)
@@ -403,14 +431,28 @@ public class GameLoopManager : MonoBehaviour
         yield return StartCoroutine(RutinaReinicio());
     }
 
-    private IEnumerator RutinaReinicio()
+    // inmediato: true → sin fade progresivo ni espera (muerte por vacío): pantalla a
+    // negro en el acto y recarga directa. false → fade + espera de 'tiempoReinicio'.
+    private IEnumerator RutinaReinicio(bool inmediato = false)
     {
-        yield return StartCoroutine(FadeOut(tiempoFadeOut));
+        if (inmediato)
+        {
+            // Corte a negro instantáneo (el FadeInConEspera de OnSceneLoaded lo levanta).
+            if (fadePanel != null)
+            {
+                fadePanel.gameObject.SetActive(true);
+                fadePanel.alpha = 1f;
+            }
+        }
+        else
+        {
+            yield return StartCoroutine(FadeOut(tiempoFadeOut));
 
-        float espera = tiempoReinicio - tiempoFadeOut;
-        yield return new WaitForSecondsRealtime(Mathf.Max(0f, espera));
+            float espera = tiempoReinicio - tiempoFadeOut;
+            yield return new WaitForSecondsRealtime(Mathf.Max(0f, espera));
+        }
 
-        AsyncOperation op = SceneManager.LoadSceneAsync(SceneManager.GetActiveScene().buildIndex);
+        AsyncOperation op = SceneManager.LoadSceneAsync(SceneManager.GetActiveScene().name);
         op.allowSceneActivation = false;
 
         while (op.progress < 0.7f)
@@ -419,19 +461,17 @@ public class GameLoopManager : MonoBehaviour
         op.allowSceneActivation = true;
     }
 
-    private IEnumerator CargarEscenaConFade(int indice)
+    private IEnumerator CargarEscenaConFade(string nombreEscena)
     {
         yield return StartCoroutine(FadeOut(tiempoFadeOut));
 
-        AsyncOperation op = SceneManager.LoadSceneAsync(indice);
+        AsyncOperation op = SceneManager.LoadSceneAsync(nombreEscena);
         op.allowSceneActivation = false;
 
         while (op.progress < 0.7f)
             yield return null;
 
         op.allowSceneActivation = true;
-        // El fade-in lo maneja OnSceneLoaded -> FadeInConEspera (escenas de juego)
-        // o directamente ocultando el panel (escena de menu).
     }
 
     private IEnumerator FadeOut(float duracion)

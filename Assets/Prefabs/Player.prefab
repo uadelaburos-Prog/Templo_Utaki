@@ -332,7 +332,7 @@ MonoBehaviour:
   groundCheckHeight: 0.05
   groundNormalThreshold: 0.7
   deathAnimDuration: 1.2
-  sfxSalto: {fileID: 0}
+  sfxSalto: {fileID: 8300000, guid: 627d4b0f5235180488f16c588aaaa6a6, type: 3}
   sfxAterrizaje: {fileID: 0}
 --- !u!120 &7953627155995595458
 LineRenderer:
@@ -501,7 +501,7 @@ MonoBehaviour:
   hookPrefab: {fileID: 7358782355621544741, guid: 46d2adaac03d867488f00f9f5841e037, type: 3}
   hookScale: 0.5
   sfxLanzar: {fileID: 8300000, guid: 5aaf3a04d6e1fbd41ad20097e3a77a28, type: 3}
-  sfxEnganchar: {fileID: 0}
+  sfxEnganchar: {fileID: 8300000, guid: 02b894d6c469780448c48da699003466, type: 3}
   isGrappling: 0
   joint: {fileID: 0}
   line: {fileID: 0}
@@ -523,7 +523,7 @@ DistanceJoint2D:
   m_Anchor: {x: 0.3114667, y: -0.40115786}
   m_ConnectedAnchor: {x: -2.3013866, y: -3.18856}
   m_AutoConfigureDistance: 1
-  m_Distance: 37.287617
+  m_Distance: 146.95065
   m_MaxDistanceOnly: 1
 --- !u!95 &5571375290543817363
 Animator:

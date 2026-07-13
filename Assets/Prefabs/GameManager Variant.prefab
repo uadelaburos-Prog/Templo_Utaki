@@ -3091,6 +3091,10 @@ PrefabInstance:
       value: -236.26009
       objectReference: {fileID: 0}
     - target: {fileID: 4872831711404302021, guid: 40392a79580242d42b1ed5c233b37fe2, type: 3}
+      propertyPath: sfxMuerte
+      value: 
+      objectReference: {fileID: 8300000, guid: a5813d22a3985b748a116e3a84aed569, type: 3}
+    - target: {fileID: 4872831711404302021, guid: 40392a79580242d42b1ed5c233b37fe2, type: 3}
       propertyPath: panelPausa
       value: 
       objectReference: {fileID: 1822902170049782214}

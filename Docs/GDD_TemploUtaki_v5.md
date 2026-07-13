@@ -8,7 +8,7 @@
 
 | **Estudio** | **Demonic Arts Company** |
 | --- | --- |
-| Versión | v5.6 — Junio 2026  ·  Cristales persistentes al morir  ·  Fin de nivel con tiempo/muertes/cristales  ·  Doble contador de muertes  ·  Audio centralizado en AudioManager (música por zona, idempotente)  ·  Panel de controles + ESC en menús  ·  base v5.5 (selector de niveles, sistemas de evento, pinchos en secuencia) |
+| Versión | v5.7 — Julio 2026  ·  Jefe Final Golem implementado (3 ataques por distancia, partes débiles por gancho, 2 fases, telegrafos)  ·  Cinemáticas tipo cómic Intro/Final (ComicPlayer)  ·  Carga de escenas por nombre (ProgresoNiveles.Orden como fuente del orden)  ·  base v5.6 (cristales persistentes, audio centralizado, panel de controles) |
 | Motor | Unity 6000.0.30f1 — URP 2D |
 | Plataforma | PC (escalable a consolas) |
 | Duración estimada | 20–30 minutos |
@@ -708,45 +708,67 @@ El lanzamiento de la llave sigue exactamente el mismo sistema de carga que el ga
 
 **Descripción**
 
-El Guardián del Templo. Un Golem de Piedra gigante que custodia la Cámara del Tesoro. Es el obstáculo final del juego. Tiene dos fases de combate con patrones de ataque diferenciados. La arena donde se desarrolla el combate forma parte del diseño del Nivel 6.
+El Guardián del Templo. Un Golem de Piedra gigante que custodia la Cámara del Tesoro. Es el obstáculo final del juego. Guardián semiestático: no patrulla ni persigue, pero se reubica con su ataque de salto. La arena donde se desarrolla el combate forma parte del diseño del Nivel 6.
 
 | *[ INSERTAR IMAGEN ]  Concept art del Golem de Piedra — Tamaño relativo al jugador* |
 | --- |
 
-Los parámetros técnicos del Golem (fases, cadencia, condición de victoria) están en (*ver Sección 15.4*)
+Los parámetros técnicos del Golem (rangos, cadencias, ventanas) están en (*ver Sección 15.4*)
+
+**Estructura del combate**
+
+El combate es un ciclo de **sets de ataques y ventanas de vulnerabilidad**: el Golem ejecuta un set de 3 ataques (con pausa entre cada uno) y después queda quieto y debilitado, exponiendo una parte del cuerpo durante 6 segundos. Si el jugador no la golpea en ese tiempo, el Golem retoma los ataques y la misma parte vuelve a exponerse en la siguiente ventana.
+
+**Entrada a la arena (BossFightTrigger):** al caer a la arena se guarda un checkpoint automático y arranca la cinemática de aparición — el Golem emerge de la tierra mientras la cámara lo enfoca y el jugador queda congelado; luego el control vuelve y empieza el combate. Si el jugador muere y reaparece en el checkpoint de la arena, el combate arranca directo, sin repetir la cinemática.
+
+**Ataques (selección por distancia al jugador, con cooldown por ataque)**
+
+Cada ataque se telegrafía con marcas rojas parpadeantes en el suelo (TelegrafoAtaque) durante el windup — el jugador siempre puede leer dónde va a caer el daño antes de que ocurra.
+
+**—  Martillo (rango cercano):** golpea a AMBOS costados a la vez. El telegrafo se expande lateralmente durante el windup («! ! ! golem ! ! !»). Al impactar, además del golpe, los tiles del suelo alrededor del Golem se vuelven peligrosos durante ~1.2s (pisar la franja = muerte) y luego se restauran.
+
+**—  Proyectiles (rango medio):** el Golem se entierra en su lugar (no se reubica) y dispara 4 ráfagas hacia ambos lados a alturas decrecientes — 3 proyectiles por lado por ráfaga, espaciados. Ritmo pausado: baja lento y pausa ~1s tras cada ráfaga; al terminar se recompone. El jugador esquiva por altura (salto/gancho) leyendo qué franja dispara cada ráfaga.
+
+**—  Salto (rango lejano):** salta hacia la posición del jugador y **se reubica donde cae**. La zona de aterrizaje se marca con telegrafo; el impacto del aterrizaje daña.
+
+**Condición de Victoria — Partes débiles**
+
+El Golem se derrota rompiendo **4 partes débiles en secuencia fija: mano izquierda → mano derecha → cabeza → pecho.** Durante cada ventana de vulnerabilidad, el cuerpo del Golem muestra visualmente la parte expuesta y esa zona se vuelve enganchable con el gancho (misma mecánica de tracción que la pared reactiva): el jugador la engancha y **tira**; al desplazarla lo suficiente cuenta como un golpe y el gancho se retrae automáticamente. Un tirón = un golpe = una parte rota. Al romper el pecho (última parte), el Golem muere: animación de colapso terminal y evento de derrota que abre la salida de la arena (pared de escape). La cámara del tesoro queda accesible.
 
 **Fase 1**
 
-**—  **El Golem dispara proyectiles de piedra en patrones predecibles y lentos.
+**—  **Activa desde el inicio hasta romper la primera mano.
 
-**—  **El jugador esquiva usando el gancho para balancearse entre los proyectiles.
-
-**—  **Cadencia inicial: lenta. El jugador tiene tiempo de leer los patrones.
+**—  **Cadencia base: pausada. El jugador tiene tiempo de leer los telegrafos y los patrones.
 
 **Fase 2**
 
-**—  **La cadencia de disparo aumenta notablemente.
+**—  **Se activa al romper la primera parte (mano izquierda).
 
-**—  **El Golem añade ráfagas cortas además de proyectiles individuales.
+**—  **La cadencia general sube (cooldowns y pausas ×0.6 — configurable).
 
-**—  **El entorno cambia: algunas plataformas de la arena comienzan a colapsar.
+**—  **Dispara un evento de entorno cableable desde el Inspector: colapso de plataformas de la arena u otros cambios (alEntrarFase2).
 
-**—  **El jugador debe moverse constantemente usando el gancho.
+**Daño al jugador**
 
-**Condición de Victoria**
+Contacto con el cuerpo del Golem = reinicio, durante todo el combate (hitbox de cuerpo siempre activa). Además matan sus habilidades: golpe de martillo, franja de suelo peligroso, impacto de aterrizaje del salto y proyectiles. Al morir el Golem, todo su daño se apaga.
 
-El jugador debe alcanzar el punto débil del Golem durante las ventanas de oportunidad que aparecen entre sus ataques. Al ser derrotado el Golem colapsa, la cámara del tesoro se ilumina y el juego muestra la pantalla de victoria. El diseño exacto del punto débil y la mecánica de impacto queda a cargo de Game Design.
-
-**Ficha de Arte**
+**Ficha de Arte (sprites implementados)**
 
 | **Elemento** | **Descripción** |
 | --- | --- |
 | Tamaño sprite | 48×64 px mínimo. Que tape parte visible del nivel. |
-| Paleta | Roca oscura, musgo, runas doradas brillantes. Punto débil destacado. |
-| Animación: idle | 4–6 frames. Respiración pesada, polvo cayendo. |
-| Animación: ataque | 8–10 frames. Movimiento de brazo o boca para disparar. |
-| Animación: Fase 2 | Crack visual en el cuerpo, ojos más brillantes. |
-| Animación: muerte | 10–12 frames. Colapso de piedra. Satisfactorio y definitivo. |
+| Paleta | Roca oscura, musgo, runas doradas brillantes. |
+| Idle | Golem_idle — 1 frame. |
+| Martillo | Golem_Martillo_ 0–4 — frames 0–3 windup, frame 4 = golpe. Animado por código. |
+| Salto | Golem_Salto_ 0–4 — frame 2 = auge, frame 4 = aterrizaje. Vía Animator. |
+| Proyectil | Golem_Proyectil_ 0–12 (13 frames) — 0–5 se entierra, dispara en 6/8/10/12, luego rebobina 11→0 (se recompone). Animado por código, ritmo pausado. |
+| Partes débiles | Golem_Partes_Debiles_1 0–3 — frame estático de la parte expuesta (0=mano izq, 1=mano der, 3=cabeza, 2=pecho). |
+| Dolor (tick) | Golem_Dano 0–1 — al recibir un golpe. |
+| Muerte | Golem_Muerte — 6 frames. Colapso de piedra, terminal (queda en el último frame). |
+
+| *ℹ  Nota técnica: Martillo y Proyectiles se animan POR CÓDIGO (el GolemBoss desactiva el Animator durante el ataque y muestra los frames a mano) para controlar el ritmo pausado. Idle, salto, partes vulnerables, tick y muerte usan el Animator (triggers desde AnyState).* |
+| --- |
 
 **6.  ****DISEÑO DE NIVELES**
 
@@ -885,6 +907,16 @@ El Nivel 5 contiene un momento set-piece construido con los sistemas de evento (
 
 El nivel final tiene dos partes: un recorrido de alta dificultad que combina todas las mecánicas aprendidas, y la arena del Golem de Piedra. La cámara es visualmente espectacular — dorada, brillante, en contraste total con la oscuridad de las Profundidades.
 
+**Arena del Golem**
+
+**—  **La entrada a la arena es una zona trigger (BossFightTrigger) que guarda un **checkpoint automático**: morir contra el Golem no obliga a repetir el recorrido del nivel.
+
+**—  **La primera entrada dispara la cinemática de aparición (el Golem emerge, la cámara lo enfoca). Los reintentos desde el checkpoint arrancan el combate directo, sin cinemática.
+
+**—  **La arena queda cerrada durante el combate; al morir el Golem, su evento de derrota abre la pared de escape (ObjetoActivable) y habilita el paso a la cámara del tesoro y la salida del nivel.
+
+**—  **Al completar el Nivel 6 se carga la cinemática Final (*ver Sección 9.6*) en lugar del panel de fin de nivel normal.
+
 | *[ INSERTAR IMAGEN ]  Esquema del Nivel 6 — Recorrido + Arena del Golem — A completar por Game Design* |
 | --- |
 
@@ -971,8 +1003,9 @@ Distribuidos a lo largo de cada nivel, los cristales son opcionales. No afectan 
 
 | **Estado** | **Descripción** |
 | --- | --- |
-| Menú Principal | Jugar, Opciones, Salir. Submenús (opciones/controles) organizados por pestañas. ESC cierra el panel abierto. Transición suave con fade antes de cargar o salir. MenuManager autónomo — sin dependencia de GameLoopManager. |
-| En Juego | HUD mínimo activo. El juego arranca desde el Nivel 1. |
+| Menú Principal | Jugar, Opciones, Salir. Submenús (opciones/controles) organizados por pestañas. ESC cierra el panel abierto. Transición suave con fade antes de cargar o salir. MenuManager autónomo — sin dependencia de GameLoopManager. **Jugar** carga la cinemática de Intro (no el selector directo). |
+| Cinemática (Intro / Final) | Página de cómic acumulativa (*ver Sección 9.6*). Auto-avance con skip. Al terminar, la Intro carga el selector de niveles; la Final vuelve al menú. |
+| En Juego | HUD mínimo activo. Flujo completo: Menú → Intro → Selector → Nivel… → Nivel 6 → Final → Menú. |
 | Pausa | Tiempo congelado. Opciones: Reanudar, Reintentar, Opciones (sonido), Controles, Menú Principal. ESC reanuda directamente. Los subpaneles (opciones/controles) se cierran solos al reanudar. |
 | Muerte — por trampa | Secuencia dramática breve (SpotlightOverlay + pausa corta) antes del reinicio automático. |
 | Muerte — por caída al vacío | Reinicio automático inmediato, sin secuencia. Si hay checkpoint activo, reaparece desde ese punto. |
@@ -1004,10 +1037,32 @@ Pantalla de selección de niveles con desbloqueo por progresión. Reutiliza la m
 
 **—  **Estado visual: cada botón intercambia su sprite según el estado — sprite normal cuando está desbloqueado, sprite de bloqueado (candado) cuando no. El botón bloqueado además queda no interactuable.
 
-**—  **Convención de Build Settings: índice 0 = menú, 1..N = niveles jugables.
+**—  **Carga de escenas **por nombre** (no por buildIndex): el orden canónico de los niveles jugables vive en `ProgresoNiveles.Orden` (array de nombres exactos de escena) — fuente única del orden de progresión, independiente del orden de Build Settings. `SiguienteNivel()` y `EsUltimoNivel()` derivan de ese array.
+
+**—  **Build Settings actuales: 0 = Menu · 1 = Level Selector · 2..7 = Niveles 1–6 · 8 = Intro · 9 = Final.
 
 | *ℹ  Principio de diseño: el selector da acceso rápido a niveles ya superados (replay, búsqueda de cristales) sin permitir saltear contenido no alcanzado. El reseteo de progreso (testing/opciones) nunca bloquea el Nivel 1.* |
 | --- |
+
+**9.6 Cinemáticas tipo Cómic (Intro y Final)**
+
+El juego abre y cierra con dos cinemáticas en formato de **página de cómic acumulativa** (escenas `Intro` y `Final`). No hay texto ni diálogo — consistente con el pilar de comunicación visual del juego.
+
+**Modelo de presentación**
+
+**—  **No es un slideshow: las viñetas se revelan **una a una con fade** y las anteriores **permanecen visibles**, componiendo la página completa de cómic en pantalla. Todas las viñetas de una escena caben en una sola pantalla (sin paginación).
+
+**—  **El layout es **manual**: el diseñador coloca cada viñeta (Image) a mano en la escena; el orden de aparición es el orden en la jerarquía del contenedor.
+
+**—  **Auto-avance con skip: cada viñeta aparece (fade 0.8s), espera 1.2s y sigue la próxima. Click o Space adelantan a la siguiente viñeta; ESC saltea la cinemática completa. Tras la última viñeta, espera final de 2s → funde a negro → carga la escena siguiente por nombre.
+
+**Flujo**
+
+**—  **`Intro`: se carga al presionar **Jugar** en el menú (`MenuManager.escenaAlJugar`). Al terminar carga el selector de niveles.
+
+**—  **`Final`: se carga al completar el último nivel (`GameLoopManager` detecta el último nivel por nombre y carga `escenaFinal` en lugar del flujo normal de fin de nivel). Al terminar vuelve al menú.
+
+**—  **Reproductor: `ComicPlayer.cs` (reutilizable — mismo script para ambas escenas). Música opcional vía AudioManager. Generador de escenas en Editor: menú `Templo Utaki → Crear Escenas de Cinemática`.
 
 **PARTE II**
 
@@ -1058,7 +1113,7 @@ Pantalla de selección de niveles con desbloqueo por progresión. Reutiliza la m
 | OneWayPlatform.cs | Plataforma one-way: atravesable desde abajo. | ✅ Implementado |
 | SpikeHazard.cs | Pinchos estáticos y retráctiles. 3 estados: Retraído / Asomando (sin daño) / Desplegado. DireccionSalida enum (Arriba/Abajo/Izquierda/Derecha). SpikeGroup con ModoCiclo: Sincronizado / Desfasado / Secuencial (delayEntreSpikes=0.15s). | ✅ Implementado |
 | VoidScript.cs | Foso de vacío: trigger → PlayerDied(fromVoid:true). Reinicio inmediato sin SpotlightOverlay. | ✅ Implementado |
-| GameLoopManager.cs | Gestión de nivel: inicio, fin, reinicio, cristales, contador de muertes. **Cristales persistentes**: HashSet por posición (no reaparecen al morir; se reinician al Reintentar o cambiar de nivel). **Dos contadores de muertes**: global de la partida (HUD/victoria) y por nivel (panel de fin de nivel). Panel de fin de nivel con tres textos (tiempo mm:ss, muertes del nivel, cristales). Referencia a panelControles (lo cierra por seguridad al despausar/cambiar escena; el switching de pestañas es por Inspector). Sistema de muerte: distingue hazard (RutinaMuerteDramatica con SpotlightOverlay + timeScale=0) y vacío (RutinaReinicio inmediata). Flag isDying previene muertes simultáneas. Sistema de checkpoints: GuardarCheckpoint(), AplicarSpawnCheckpoint(), LimpiarCheckpoint(). NivelCompleto() desbloquea el siguiente nivel vía ProgresoNiveles.DesbloquearHasta(). Ya **no** gestiona música. DontDestroyOnLoad. Hijo directo: SpotlightCanvas. Instanciar en Nivel 1. | ✅ Implementado |
+| GameLoopManager.cs | Gestión de nivel: inicio, fin, reinicio, cristales, contador de muertes. **Cristales persistentes**: HashSet por posición (no reaparecen al morir; se reinician al Reintentar o cambiar de nivel). **Dos contadores de muertes**: global de la partida (HUD/victoria) y por nivel (panel de fin de nivel). Panel de fin de nivel con tres textos (tiempo mm:ss, muertes del nivel, cristales). Referencia a panelControles (lo cierra por seguridad al despausar/cambiar escena; el switching de pestañas es por Inspector). Sistema de muerte: distingue hazard (RutinaMuerteDramatica con SpotlightOverlay + timeScale=0) y vacío (RutinaReinicio inmediata). Flag isDying previene muertes simultáneas. Sistema de checkpoints: GuardarCheckpoint(), AplicarSpawnCheckpoint(), LimpiarCheckpoint(), EsEsteCheckpoint(pos) (consultado por BossFightTrigger para saltar la cinemática del Golem en respawn). NivelCompleto() desbloquea el siguiente nivel vía ProgresoNiveles.DesbloquearHasta(); si el nivel completado es el último (por nombre), carga la cinemática Final (escenaFinal) con fade. Carga de escenas por nombre (CargarEscenaConFade(string)). Ya **no** gestiona música. DontDestroyOnLoad. Hijo directo: SpotlightCanvas. Instanciar en Nivel 1. | ✅ Implementado |
 | AudioManager.cs | Singleton con DontDestroyOnLoad. SFX espaciales (FxObject). **Autoridad de música por escena**: array musicaPorEscena indexado por buildIndex, suscrito a sceneLoaded, reproduce la pista de cada escena (incluido el menú). PlayMusic **idempotente** (no reinicia si ya suena ese clip → continuidad al morir y entre escenas de la misma zona) con crossfade (SwapingVolume). Control de volumen vía AudioMixer. Se configura una sola vez desde el menú. | ✅ Implementado |
 | CamaraScript.cs | Seguimiento con Lerp, look-behind horizontal, look-down proporcional a velocidad de caída. SnapToPlayer() al respawnear desde checkpoint. | ✅ Implementado |
 | CrystalPickup.cs | Trigger de recolección, comunicación con GameLoopManager. | ✅ Implementado |
@@ -1067,9 +1122,9 @@ Pantalla de selección de niveles con desbloqueo por progresión. Reutiliza la m
 | SpectralPatrollerAI.cs | Máquina de estados del Guerrero Espectral: patrulla (waypoints A/B), idle, regreso, órbita orgánica (tangencial + resorte radial; orbitRadius 3u ± 0.4u sinusoidal, orbitVelocity 1.5 rad/s), windup con parpadeo blanco (0.35s), dash (18 u/s, 8u, cooldown 2s, dashTriggerRange 3.5u, playerStillTime 1.5s), recover (0.4s). Detección radio 6u / abandono 8.5u. AfterimageTrail durante dash. isTrigger forzado en Awake. Bloqueado solo por SpectralWall. Muerte por HazardFire (tag SpectralEnemy). | ✅ Implementado |
 | CheckpointZone.cs | Objeto en escena (trigger one-shot). Al entrar el jugador: llama GameLoopManager.GuardarCheckpoint(). Restaura estado visual del animator al recargar (tolerancia 0.1u). SFX de activación. | ✅ Implementado |
 | BreakableAnchor.cs | Superficie grappleable destructible. Se activa mediante OnHooked(GrappleScript) al engancharse. Tres fases de advertencia visual antes de la rotura. El gancho se retrae automáticamente al romperse. Parámetros: permanentBreak (bool), regenDelay (float, default 5s). | ✅ Implementado |
-| MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego(), IrANivel(indice), Salir(), AbrirOpciones(), CerrarOpciones(). ESC cierra el panel abierto (array panelesCerrablesConEsc, uno por pulsación). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime); ya **no** corta la música al entrar a un nivel (el destino la cambia con crossfade), solo StopMusic al salir del juego. La música del menú la maneja el AudioManager (buildIndex 0). | ✅ Implementado |
-| SelectorNiveles.cs | Selector de niveles (UI). Habilita/bloquea botones según el progreso (ProgresoNiveles) e intercambia el sprite de cada botón (normal/bloqueado). Cablea el onClick para cargar el nivel con fade. Flag siempreDesbloqueado por nivel. RefrescarBotones() en OnEnable. | ✅ Implementado |
-| ProgresoNiveles.cs | Persistencia del progreso de niveles vía PlayerPrefs (clase estática). MaxDesbloqueado, EstaDesbloqueado(idx), DesbloquearHasta(idx), Reiniciar(). El Nivel 1 nunca baja del mínimo. | ✅ Implementado |
+| MenuManager.cs | Gestión del menú principal. Autónomo — no depende de GameLoopManager. IniciarJuego() carga la cinemática de Intro (campo escenaAlJugar, carga por nombre), Salir(), AbrirOpciones(), CerrarOpciones(). ESC cierra el panel abierto (array panelesCerrablesConEsc, uno por pulsación). Transiciones con CanvasGroup fade 0.4s (unscaledDeltaTime); ya **no** corta la música al entrar a un nivel (el destino la cambia con crossfade), solo StopMusic al salir del juego. La música del menú la maneja el AudioManager (buildIndex 0). | ✅ Implementado |
+| SelectorNiveles.cs | Selector de niveles (UI). Habilita/bloquea botones según el progreso (ProgresoNiveles) e intercambia el sprite de cada botón (normal/bloqueado). Cablea el onClick para cargar el nivel con fade, por nombre de escena. Flag siempreDesbloqueado por nivel. RefrescarBotones() en OnEnable. | ✅ Implementado |
+| ProgresoNiveles.cs | Persistencia del progreso de niveles vía PlayerPrefs (clase estática). Define el **orden canónico de niveles por nombre de escena** (array Orden — fuente única del orden, independiente de Build Settings). MaxDesbloqueado, EstaDesbloqueado(nombre), DesbloquearHasta(nombre), SiguienteNivel(nombre), EsUltimoNivel(nombre), Reiniciar(). El Nivel 1 nunca baja del mínimo. | ✅ Implementado |
 | RelicaPickup.cs | Reliquia/ídolo recolectable por proximidad (OverlapCircle) con flotación. Al recogerse dispara un UnityEvent (una sola vez) que cablea las consecuencias de la escena scriptada. | ✅ Implementado |
 | ObjetoActivable.cs | Activa/desactiva paredes, terreno o trampas por evento (Collider2D + Renderer propios e hijos). activoInicial, animación de aparición por offset. Activar()/Desactivar()/Alternar(). | ✅ Implementado |
 | RollingBoulder.cs | Roca rodante estilo Indiana Jones. Dormida hasta Activar(): cae y rueda horizontalmente girando con su velocidad. Contacto con jugador = reinicio; aplasta a la Momia. | ✅ Implementado |
@@ -1091,7 +1146,12 @@ Pantalla de selección de niveles con desbloqueo por progresión. Reutiliza la m
 | CameraZone.cs | Zonas que ajustan los límites de cámara al entrar (extLeft/Right/Bottom/Top, transitionSpeed). | ✅ Implementado |
 | ParallaxBackground.cs | Desplazamiento parallax de capas de fondo según la cámara. | ✅ Implementado |
 | IHookable.cs | Interfaz para objetos interactuables por gancho (OnHooked/OnReleased). Implementada por ReactiveWall y BreakableAnchor. | ✅ Implementado |
-| GolemBoss.cs | Máquina de estados del Jefe Final, fases, patrones de ataque, condición de victoria. | 📋 Planeado |
+| GolemBoss.cs | Jefe Final (Nivel 6). FSM por corrutina maestra (Dormido/Emergiendo/Combate/Muriendo/Muerto). Selección de ataque por distancia con cooldown por ataque (Martillo/Proyectiles/Salto), sets de N ataques → ventana de vulnerabilidad, secuencia de 4 partes débiles, Fase 2 (factorFase2 sobre cadencias + UnityEvent alEntrarFase2), aparición emergiendo con foco de cámara y jugador congelado, suelo peligroso por Tilemap tras el martillo, muerte terminal + UnityEvent alMorir. Martillo y Proyectiles animados por código (Animator desactivado durante el ataque). | ✅ Implementado |
+| GolemWeakPoint.cs | Parte débil del Golem (hijo, espacio local). Collider hookeable invisible (tag/layer Hookable, IHookable, tracción tipo ReactiveWall): el jugador engancha y tira; al desplazarla distanciaGolpe (0.6u) registra UN golpe en GolemBoss y retrae el gancho. El resaltado visual lo da el frame del cuerpo, no un sprite propio. | ✅ Implementado |
+| GolemHitbox.cs | Hitbox de daño activable del Golem (Collider2D trigger): cuerpo (activa todo el combate), martillo izq/der, aterrizaje del salto y franja de suelo peligroso. OnTriggerEnter/Stay → PlayerDied(). | ✅ Implementado |
+| TelegrafoAtaque.cs | Telegrafío de ataques: marca roja parpadeante en la zona donde va a caer el daño, durante el windup. Expansión lateral opcional (copiasPorLado + direccionExpansion) para la onda del martillo. Se apaga sola. | ✅ Implementado |
+| BossFightTrigger.cs | Zona de entrada a la arena del Golem: guarda checkpoint automático e inicia la pelea. Si el jugador reaparece desde ese mismo checkpoint, salta la cinemática de aparición (EsEsteCheckpoint). | ✅ Implementado |
+| ComicPlayer.cs | Reproductor de cinemáticas tipo cómic (escenas Intro/Final). Página acumulativa: revela viñetas (CanvasGroup) una a una con fade sin ocultar las previas; auto-avance (fadeVineta 0.8s, tiempoEntreVinetas 1.2s, tiempoFinal 2s), click/Space adelanta, ESC saltea. Funde a negro y carga la escena siguiente por nombre. Música opcional vía AudioManager. | ✅ Implementado |
 
 **11.2 Sistema de Capas y Tags (Unity)**
 
@@ -1273,9 +1333,10 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-048** | **Lanzador — Disparo fijo** | Proyectiles en dirección fija cada 2–3s. No apunta al jugador. | Enemigos | *LauncherAI.cs.* |
 | **F-049** | **Lanzador — Proyectil** | 8 u/s. Destruido al impactar, al contactar jugador o a los 10s. | Enemigos | *Projectile.cs. 8×8 px.* |
 | **F-050** | **Lanzador — Daño** | Contacto con Lanzador o proyectil = reinicio. | Enemigos | *Sin cooldown. Sin combate.* |
-| **F-051** | **Golem Fase 1** | Proyectiles de piedra lentos y predecibles. El jugador esquiva con gancho. | Enemigos | *GolemBoss.cs. Arena en Nivel 6.* |
-| **F-052** | **Golem Fase 2** | Cadencia aumenta. Ráfagas cortas. Plataformas de la arena comienzan a colapsar. | Enemigos |  |
-| **F-053** | **Golem — Condición de victoria** | El jugador alcanza el punto débil del Golem en las ventanas entre ataques. | Enemigos | *Mecánica a cargo de Game Design.* |
+| **F-051** | **Golem — Ataques por distancia** | Tres ataques elegidos por distancia al jugador, con cooldown por ataque y telegrafo rojo: Martillo (cerca — ambos costados + franja de suelo peligroso por Tilemap), Proyectiles (media — 4 ráfagas a alturas decrecientes, 3 por lado, ritmo pausado), Salto (lejos — se reubica donde cae). Sets de 3 ataques entre ventanas de vulnerabilidad. | Enemigos | *GolemBoss.cs + GolemHitbox.cs + TelegrafoAtaque.cs. Arena en Nivel 6. Martillo y Proyectiles animados por código.* |
+| **F-052** | **Golem Fase 2** | Se activa al romper la primera parte (mano izq). Cadencias y pausas ×0.6 (factorFase2). UnityEvent alEntrarFase2 cablea el colapso de plataformas de la arena. | Enemigos | *Evento de entorno configurable desde Inspector.* |
+| **F-053** | **Golem — Condición de victoria** | 4 partes débiles en secuencia fija (mano izq → mano der → cabeza → pecho), expuestas en ventanas de 6s entre sets de ataques. El jugador engancha la parte con el gancho y tira (tracción IHookable, 1 tirón = 1 golpe). Romper el pecho = muerte del Golem → evento alMorir abre la pared de escape. | Enemigos | *GolemWeakPoint.cs (tag/layer Hookable, espacio local, distanciaGolpe 0.6u).* |
+| **F-087** | **Golem — Arena con checkpoint** | Trigger de entrada a la arena: guarda checkpoint automático e inicia la pelea con cinemática de aparición (emerge de la tierra + foco de cámara). Respawn desde ese checkpoint = combate directo sin cinemática. | Enemigos | *BossFightTrigger.cs + GameLoopManager.EsEsteCheckpoint().* |
 | **▌ SISTEMA DE DAÑO Y MUERTE** |
 | **F-054** | **Muerte instantánea** | Cualquier contacto con enemigo, proyectil o trampa = reinicio. Sin vidas ni salud. | Sistema | *Muerte por hazard: animación dramática + SpotlightOverlay + pausa (Time.timeScale = 0). Muerte por vacío: reinicio inmediato. Jugador de vuelta **<** 2s.* |
 | **F-055** | **Reinicio automático** | Tras la muerte, el nivel se reinicia sin pantalla de game over. | Sistema | *Los cristales ya recogidos **se conservan** (no reaparecen); reinician solo con R o al cambiar de nivel. La música no se reinicia.* |
@@ -1314,8 +1375,18 @@ La tabla maestra de todos los parámetros configurables del juego está en (*ver
 | **F-084** | **Roca rodante** | Roca estilo Indiana Jones: dormida hasta activarse, cae y rueda horizontalmente. Contacto = reinicio; aplasta a la Momia. | Entorno | *RollingBoulder.cs. Distinta de la Roca Cayente (F-033).* |
 | **F-085** | **Cambio de skin del jugador** | Intercambia el RuntimeAnimatorController del jugador a una variante (Override Controller recomendado), conservando animaciones. Tinte opcional. | Eventos | *PlayerSkinSwapper.cs. PlayerItem.controller.* |
 | **F-086** | **Selector de niveles con progresión** | Pantalla de selección con desbloqueo por progresión (PlayerPrefs). Botones que intercambian sprite normal/bloqueado. Nivel 1 siempre desbloqueado. | UI | *SelectorNiveles.cs + ProgresoNiveles.cs. Desbloqueo escrito por GameLoopManager.NivelCompleto().* |
+| **F-088** | **Cinemáticas tipo cómic (Intro/Final)** | Página de cómic acumulativa: viñetas colocadas a mano que se revelan una a una con fade y permanecen. Auto-avance (0.8s fade + 1.2s espera), click/Space adelanta, ESC saltea. Intro tras Jugar; Final tras el último nivel. | UI | *ComicPlayer.cs. Escenas Intro/Final generadas con Templo Utaki → Crear Escenas de Cinemática. Sección 9.6.* |
+| **F-089** | **Carga de escenas por nombre** | Todo cambio de escena se hace por nombre. El orden de progresión vive en ProgresoNiveles.Orden (array de nombres), independiente del orden de Build Settings. | Sistema | *ProgresoNiveles.cs (Orden, SiguienteNivel, EsUltimoNivel), GameLoopManager.CargarEscenaConFade(string), MenuManager.CargarEscena(string).* |
 
 **Changelog del Registro**
+
+**Sesión 15***   Jul 2026  —  Jefe Golem, cinemáticas cómic y escenas por nombre (v5.7)*
+
+**→  **Jefe Final Golem implementado (F-051–F-053, F-087, Secciones 5.6 y 15.4): `GolemBoss.cs` (FSM por corrutina, 3 ataques por distancia con cooldown, sets de ataques → ventanas de vulnerabilidad, Fase 2 con factorFase2 + evento de colapso, aparición emergiendo con foco de cámara), `GolemWeakPoint.cs` (4 partes débiles enganchables por tracción del gancho, secuencia mano izq → mano der → cabeza → pecho), `GolemHitbox.cs` (cuerpo + martillo + aterrizaje + suelo peligroso), `TelegrafoAtaque.cs` (marcas rojas con expansión lateral), `BossFightTrigger.cs` (checkpoint de arena + skip de cinemática en respawn). Martillo y Proyectiles animados por código (Animator desactivado durante el ataque); suelo peligroso por reemplazo de tiles del Tilemap. Herramientas de Editor: `Templo Utaki → Crear Prefab del Golem` y `→ Crear Animator del Golem`.
+
+**→  **Cinemáticas tipo cómic (F-088, Sección 9.6): `ComicPlayer.cs` con modelo de página acumulativa (viñetas con layout manual que se revelan con fade y permanecen). Flujo: Menú → Intro → Selector → … → Nivel 6 → Final → Menú. Escenas `Intro`/`Final` en Build Settings (índices 8 y 9); generador en `Templo Utaki → Crear Escenas de Cinemática`.
+
+**→  **Carga de escenas por nombre (F-089, Sección 9.5): `ProgresoNiveles` refactorizado — el array `Orden` (nombres exactos de escena) es la fuente única del orden de progresión; API por nombre (EstaDesbloqueado/DesbloquearHasta/SiguienteNivel/EsUltimoNivel). `GameLoopManager` y `MenuManager` cargan por nombre (`CargarEscenaConFade(string)` / `escenaAlJugar`). Nivel 6 agregado a Build Settings (orden actual: 0=Menu, 1=Level Selector, 2..7=N1..6, 8=Intro, 9=Final).
 
 **Sesión 14***   Jun 2026  —  Persistencia de cristales, fin de nivel, audio centralizado y UI (v5.6)*
 
@@ -1552,17 +1623,32 @@ Patrullero físico por rebote (sin waypoints) con salto y detección por línea 
 | Daño — Momia del Templo | Muerte instantánea | Friendly fire ambiental. |
 | Daño — Guerrero Espectral | Sin efecto | El proyectil lo atraviesa. |
 
-**Golem de Piedra — Jefe Final**
+**Golem de Piedra — Jefe Final (`GolemBoss.cs`)**
 
-| **Parámetro** | **Descripción** |
-| --- | --- |
-| Tipo de combate | Guardián estático. Dos fases con patrones diferenciados. |
-| Tamaño sprite | 48×64 px mínimo. |
-| Fases | 2. Transición a Fase 2 por condición a definir por Game Design. |
-| Cadencia Fase 1 | Lenta. El jugador tiene tiempo de leer los patrones. |
-| Cadencia Fase 2 | Aumenta. Agrega ráfagas cortas. |
-| Daño al jugador | Contacto con Golem o proyectiles = reinicio de la arena. |
-| Condición de victoria | Alcanzar punto débil en ventanas entre ataques. A definir por Game Design. |
+Guardián semiestático con selección de ataque por distancia. Todos los valores son SerializeField.
+
+| **Parámetro** | **Valor** | **Variable** | **Notas** |
+| --- | --- | --- | --- |
+| Rango cercano (Martillo) | ≤ 3.5 u | rangoCerca | Distancia al jugador. |
+| Rango lejano (Salto) | ≥ 8 u | rangoLejos | Entre ambos rangos usa Proyectiles. Si el preferido está en cooldown, cae al siguiente disponible. |
+| Cooldown Martillo | 2.5s | cooldownMartillo | Por ataque, independiente. |
+| Cooldown Proyectiles | 3s | cooldownProyectiles |  |
+| Cooldown Salto | 4s | cooldownSalto |  |
+| Pausa entre ataques | 1s | pausaEntreAtaques | Dentro del set. |
+| Ataques por set | 3 | ataquesPorSet | Entre ventanas de vulnerabilidad. |
+| Ventana de vulnerabilidad | 6s | tiempoVulnerable | Si expira sin golpe, la misma parte se repite en la próxima ventana. |
+| Golpe a parte débil | 0.6 u de tirón | distanciaGolpe (GolemWeakPoint) | Desplazamiento local con la tracción del gancho. 1 tirón = 1 golpe. |
+| Partes débiles | 4 — mano izq → mano der → cabeza → pecho | partesDebiles[] | Secuencia fija. Romper el pecho = victoria. |
+| Fase 2 | Desde la 1ª parte rota | factorFase2 = 0.6 | Cooldowns y pausas ×0.6 + UnityEvent alEntrarFase2 (colapso de plataformas). |
+| Martillo — windup / impacto | 0.6s / 0.3s | windupMartillo / impactoMartillo | Frames 0–3 windup, frame 4 golpe. Ambos costados a la vez. |
+| Martillo — suelo peligroso | 4 tiles por lado, 1.2s | alcanceTilesSuelo / duracionSueloPeligroso | Reemplaza tiles del Tilemap por tile peligroso + hitbox de franja (altura 1u); restaura al terminar. |
+| Proyectiles — ráfagas | 4 ráfagas × 3 proyectiles/lado | proyectilesPorRafaga | Alturas decrecientes (bajadaPorRafaga 0.7u), espaciado 0.6u. Reutiliza Projectile.cs. |
+| Proyectiles — ritmo | 0.35s/frame + 1s de pausa por ráfaga | tiempoBajadaProyectil / pausaEntreRafagas | Se entierra en su lugar (no se reubica) y se recompone al terminar. |
+| Salto — arco | Altura 4u, 0.9s | alturaSalto / duracionSalto | Windup 0.5s. Se reubica donde cae; impacto de aterrizaje 0.3s. |
+| Aparición | Sube 5u en 2s | alturaEmerger / duracionEmerger | Foco de cámara 1.5s, jugador congelado. Se salta en respawn de checkpoint. |
+| Muerte | 2.5s | duracionMuerte | Animación terminal + UnityEvent alMorir (abre la pared de escape). |
+| Daño al jugador | Contacto = reinicio | cuerpoDanio (GolemHitbox) | Hitbox de cuerpo activa durante todo el combate; también matan martillo, suelo peligroso, aterrizaje y proyectiles. |
+| Telegrafío | Marcas rojas parpadeantes | TelegrafoAtaque | Parpadeo 0.12s. Expansión lateral opcional (copiasPorLado, espaciado 1u) para la onda del martillo. |
 
 **15.8 Sistema de Llaves**
 
@@ -1639,9 +1725,12 @@ Patrullero físico por rebote (sin waypoints) con salto y detección por línea 
 | Ícono de alerta | 8×8 px | Amarillo | — |
 | Lanzador | 16×16 px | Verdes llamativos y rojos | Carga 4–6f · disparo 2f |
 | Proyectil (Lanzador) | 8×8 px | Distinguible del fondo | Loop 2–4f, rotación o pulso |
-| Golem — idle | 48×64 px mín. | Roca oscura, musgo, runas doradas | 4–6f, respiración pesada |
-| Golem — ataque | 48×64 px mín. | Punto débil destacado | 8–10f |
-| Golem — Fase 2 | 48×64 px mín. | Crack visible, ojos brillantes | — |
-| Golem — muerte | 48×64 px mín. | — | 10–12f, colapso de piedra |
+| Golem — idle | 48×64 px mín. | Roca oscura, musgo, runas doradas | 1f (Golem_idle) |
+| Golem — martillo | 48×64 px mín. | Telegrafo rojo en el suelo | 5f (0–3 windup, 4 golpe) |
+| Golem — salto | 48×64 px mín. | — | 5f (2 auge, 4 aterrizaje) |
+| Golem — proyectil | 48×64 px mín. | Se entierra y dispara por hoyos laterales | 13f (rebobina al recomponerse) |
+| Golem — partes débiles | 48×64 px mín. | Parte expuesta resaltada en el cuerpo | 4f estáticos (mano izq / mano der / pecho / cabeza) |
+| Golem — dolor (tick) | 48×64 px mín. | — | 2f |
+| Golem — muerte | 48×64 px mín. | — | 6f, colapso de piedra, terminal |
 
 *Demonic Arts Company  ·  Templo Utaki  ·  GDD v5.6  ·  Junio 2026  ·  Confidencial — Uso interno del equipo*
